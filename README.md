@@ -18,7 +18,7 @@ Create a PHP application
 
 Add MySQL support to your application
     
-	rhc app cartridge add -a owncloud -c mysql-5.1
+	rhc cartridge add -a owncloud -c mysql-5.1
     
 Add this upstream ownCloud quickstart repo
 
