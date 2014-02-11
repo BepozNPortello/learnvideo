@@ -1,28 +1,60 @@
 <?php
-OC::$CLASSPATH['OC_Contacts_App'] = 'apps/contacts/lib/app.php';
-OC::$CLASSPATH['OC_Contacts_Addressbook'] = 'apps/contacts/lib/addressbook.php';
-OC::$CLASSPATH['OC_Contacts_VCard'] = 'apps/contacts/lib/vcard.php';
-OC::$CLASSPATH['OC_Contacts_Hooks'] = 'apps/contacts/lib/hooks.php';
-OC::$CLASSPATH['OC_Connector_Sabre_CardDAV'] = 'apps/contacts/lib/connector_sabre.php';
-OC::$CLASSPATH['OC_Search_Provider_Contacts'] = 'apps/contacts/lib/search.php';
-OCP\Util::connectHook('OC_User', 'post_createUser', 'OC_Contacts_Hooks', 'createUser');
-OCP\Util::connectHook('OC_User', 'post_deleteUser', 'OC_Contacts_Hooks', 'deleteUser');
-OCP\Util::connectHook('OC_Calendar', 'getEvents', 'OC_Contacts_Hooks', 'getBirthdayEvents');
-OCP\Util::connectHook('OC_Calendar', 'getSources', 'OC_Contacts_Hooks', 'getCalenderSources');
 
-OCP\App::register( array(
-  'order' => 10,
-  'id' => 'contacts',
-  'name' => 'Contacts' ));
+namespace OCA\Contacts;
+use \OC\AppFramework\Core\API;
 
-OCP\App::addNavigationEntry( array(
-  'id' => 'contacts_index',
-  'order' => 10,
-  'href' => OCP\Util::linkTo( 'contacts', 'index.php' ),
-  'icon' => OCP\Util::imagePath( 'settings', 'users.svg' ),
-  'name' => OC_L10N::get('contacts')->t('Contacts') ));
+//require_once __DIR__ . '/../lib/controller/pagecontroller.php';
+\Sabre\VObject\Component::$classMap['VCARD']	= '\OCA\Contacts\VObject\VCard';
+\Sabre\VObject\Property::$classMap['CATEGORIES'] = 'OCA\Contacts\VObject\GroupProperty';
+\Sabre\VObject\Property::$classMap['FN']		= '\OC\VObject\StringProperty';
+\Sabre\VObject\Property::$classMap['TITLE']		= '\OC\VObject\StringProperty';
+\Sabre\VObject\Property::$classMap['ROLE']		= '\OC\VObject\StringProperty';
+\Sabre\VObject\Property::$classMap['NOTE']		= '\OC\VObject\StringProperty';
+\Sabre\VObject\Property::$classMap['NICKNAME']	= '\OC\VObject\StringProperty';
+\Sabre\VObject\Property::$classMap['EMAIL']		= '\OC\VObject\StringProperty';
+\Sabre\VObject\Property::$classMap['TEL']		= '\OC\VObject\StringProperty';
+\Sabre\VObject\Property::$classMap['IMPP']		= '\OC\VObject\StringProperty';
+\Sabre\VObject\Property::$classMap['URL']		= '\OC\VObject\StringProperty';
+\Sabre\VObject\Property::$classMap['N']			= '\OC\VObject\CompoundProperty';
+\Sabre\VObject\Property::$classMap['ADR']		= '\OC\VObject\CompoundProperty';
+\Sabre\VObject\Property::$classMap['GEO']		= '\OC\VObject\CompoundProperty';
+\Sabre\VObject\Property::$classMap['ORG']		= '\OC\VObject\CompoundProperty';
 
+\OC::$server->getNavigationManager()->add(array(
+	'id' => 'contacts',
+	'order' => 10,
+	'href' => \OCP\Util::linkToRoute('contacts_index'),
+	'icon' => \OCP\Util::imagePath( 'contacts', 'contacts.svg' ),
+	'name' => \OCP\Util::getL10N('contacts')->t('Contacts')
+	)
+);
 
-OCP\App::registerPersonal('contacts','settings');
-OCP\Util::addscript('contacts', 'loader');
-OC_Search::registerProvider('OC_Search_Provider_Contacts');
+$api = new API('contacts');
+
+$api->connectHook('OC_User', 'post_createUser', '\OCA\Contacts\Hooks', 'userCreated');
+$api->connectHook('OC_User', 'post_deleteUser', '\OCA\Contacts\Hooks', 'userDeleted');
+$api->connectHook('OCA\Contacts', 'pre_deleteAddressBook', '\OCA\Contacts\Hooks', 'addressBookDeletion');
+$api->connectHook('OCA\Contacts', 'pre_deleteContact', '\OCA\Contacts\Hooks', 'contactDeletion');
+$api->connectHook('OCA\Contacts', 'post_createContact', 'OCA\Contacts\Hooks', 'contactAdded');
+$api->connectHook('OCA\Contacts', 'post_updateContact', '\OCA\Contacts\Hooks', 'contactUpdated');
+$api->connectHook('OCA\Contacts', 'scanCategories', '\OCA\Contacts\Hooks', 'scanCategories');
+$api->connectHook('OCA\Contacts', 'indexProperties', '\OCA\Contacts\Hooks', 'indexProperties');
+$api->connectHook('OC_Calendar', 'getEvents', 'OCA\Contacts\Hooks', 'getBirthdayEvents');
+$api->connectHook('OC_Calendar', 'getSources', 'OCA\Contacts\Hooks', 'getCalenderSources');
+
+\OCP\Util::addscript('contacts', 'loader');
+
+\OC_Search::registerProvider('OCA\Contacts\SearchProvider');
+//\OCP\Share::registerBackend('contact', 'OCA\Contacts\Share_Backend_Contact');
+\OCP\Share::registerBackend('addressbook', 'OCA\Contacts\Share\Addressbook', 'contact');
+//\OCP\App::registerPersonal('contacts','personalsettings');
+
+if(\OCP\User::isLoggedIn()) {
+	$app = new App($api->getUserId());
+	$addressBooks = $app->getAddressBooksForUser();
+	foreach($addressBooks as $addressBook)  {
+		if($addressBook->getBackend()->name === 'local') {
+			\OCP\Contacts::registerAddressBook(new AddressbookProvider($addressBook));
+		}
+	}
+}

@@ -1,12 +1,7 @@
 <?php $TRANSLATIONS = array(
 "Pictures" => "Billeder",
-"Settings" => "Indstillinger",
-"Rescan" => "Genindlæs",
-"Stop" => "Stop",
+"Shared by" => "Delt af",
+"Error loading slideshow template" => "Fejl ved indlæsning af diasshow skabelon",
 "Share" => "Del",
-"Back" => "Tilbage",
-"Remove confirmation" => "Fjern bekræftelse",
-"Do you want to remove album" => "Ønsker du at fjerne albummet",
-"Change album name" => "Ændre albummets navn",
-"New album name" => "Nyt album navn"
+"The \"Image Viewer\" application also need to be enabled to use this application." => "Applikationen \"Image Viewer\" skal også aktiveres for at bruge denne applikation."
 );

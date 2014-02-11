@@ -6,74 +6,111 @@
  * See the COPYING-README file.
  */
 
-require_once('smb4php/smb.php');
+namespace OC\Files\Storage;
 
-class OC_FileStorage_SMB extends OC_FileStorage_StreamWrapper{
+require_once __DIR__ . '/../3rdparty/smb4php/smb.php';
+
+class SMB extends \OC\Files\Storage\StreamWrapper{
 	private $password;
 	private $user;
 	private $host;
 	private $root;
 	private $share;
 
-	private static $tempFiles=array();
-
-	public function __construct($params){
-		$this->host=$params['host'];
-		$this->user=$params['user'];
-		$this->password=$params['password'];
-		$this->share=$params['share'];
-		$this->root=isset($params['root'])?$params['root']:'/';
-		if(substr($this->root,-1,1)!='/'){
-			$this->root.='/';
-		}
-		if(substr($this->root,0,1)!='/'){
-			$this->root='/'.$this->root;
-		}
-		if(substr($this->share,0,1)!='/'){
-			$this->share='/'.$this->share;
-		}
-		if(substr($this->share,-1,1)=='/'){
-			$this->share=substr($this->share,0,-1);
-		}
-
-		//create the root folder if necesary
-		if(!$this->is_dir('')){
-			$this->mkdir('');
+	public function __construct($params) {
+		if (isset($params['host']) && isset($params['user']) && isset($params['password']) && isset($params['share'])) {
+			$this->host=$params['host'];
+			$this->user=$params['user'];
+			$this->password=$params['password'];
+			$this->share=$params['share'];
+			$this->root=isset($params['root'])?$params['root']:'/';
+			if ( ! $this->root || $this->root[0]!='/') {
+				$this->root='/'.$this->root;
+			}
+			if (substr($this->root, -1, 1)!='/') {
+				$this->root.='/';
+			}
+			if ( ! $this->share || $this->share[0]!='/') {
+				$this->share='/'.$this->share;
+			}
+			if (substr($this->share, -1, 1)=='/') {
+				$this->share = substr($this->share, 0, -1);
+			}
+		} else {
+			throw new \Exception();
 		}
 	}
 
-	public function constructUrl($path){
-		if(substr($path,-1)=='/'){
-			$path=substr($path,0,-1);
-		}
-		return 'smb://'.$this->user.':'.$this->password.'@'.$this->host.$this->share.$this->root.$path;
+	public function getId(){
+		return 'smb::' . $this->user . '@' . $this->host . '/' . $this->share . '/' . $this->root;
 	}
 
-	public function stat($path){
-		if(!$path and $this->root=='/'){//mtime doesn't work for shares
-			$mtime=$this->shareMTime();
+	public function constructUrl($path) {
+		if (substr($path, -1)=='/') {
+			$path = substr($path, 0, -1);
+		}
+		if (substr($path, 0, 1)=='/') {
+			$path = substr($path, 1);
+		}
+		// remove trailing dots which some versions of samba don't seem to like
+		$path = rtrim($path, '.');
+		$path = urlencode($path);
+		$user = urlencode($this->user);
+		$pass = urlencode($this->password);
+		return 'smb://'.$user.':'.$pass.'@'.$this->host.$this->share.$this->root.$path;
+	}
+
+	public function stat($path) {
+		if ( ! $path and $this->root=='/') {//mtime doesn't work for shares
 			$stat=stat($this->constructUrl($path));
+			if (empty($stat)) {
+				return false;
+			}
+			$mtime=$this->shareMTime();
 			$stat['mtime']=$mtime;
 			return $stat;
-		}else{
-			return stat($this->constructUrl($path));
+		} else {
+			$stat = stat($this->constructUrl($path));
+
+			// smb4php can return an empty array if the connection could not be established
+			if (empty($stat)) {
+				return false;
+			}
+
+			return $stat;
 		}
 	}
 
-	public function filetype($path){
-		return (bool)@$this->opendir($path);//using opendir causes the same amount of requests and caches the content of the folder in one go
+	/**
+	 * Unlinks file or directory
+	 * @param string @path
+	 */
+	public function unlink($path) {
+		if ($this->is_dir($path)) {
+			$this->rmdir($path);
+		}
+		else {
+			$url = $this->constructUrl($path);
+			unlink($url);
+			clearstatcache(false, $url);
+		}
+		// smb4php still returns false even on success so
+		// check here whether file was really deleted
+		return !file_exists($path);
 	}
 
 	/**
 	 * check if a file or folder has been updated since $time
+	 * @param string $path
 	 * @param int $time
 	 * @return bool
 	 */
-	public function hasUpdated($path,$time){
-		if(!$path and $this->root=='/'){
-			//mtime doesn't work for shares, but giving the nature of the backend, doing a full update is still just fast enough
+	public function hasUpdated($path,$time) {
+		if(!$path and $this->root=='/') {
+			// mtime doesn't work for shares, but giving the nature of the backend,
+			// doing a full update is still just fast enough
 			return true;
-		}else{
+		} else {
 			$actualTime=$this->filemtime($path);
 			return $actualTime>$time;
 		}
@@ -82,14 +119,16 @@ class OC_FileStorage_SMB extends OC_FileStorage_StreamWrapper{
 	/**
 	 * get the best guess for the modification time of the share
 	 */
-	private function shareMTime(){
+	private function shareMTime() {
 		$dh=$this->opendir('');
 		$lastCtime=0;
-		while($file=readdir($dh)){
-			if($file!='.' and $file!='..'){
-				$ctime=$this->filemtime($file);
-				if($ctime>$lastCtime){
-					$lastCtime=$ctime;
+		if(is_resource($dh)) {
+			while (($file = readdir($dh)) !== false) {
+				if ($file!='.' and $file!='..') {
+					$ctime=$this->filemtime($file);
+					if ($ctime>$lastCtime) {
+						$lastCtime=$ctime;
+					}
 				}
 			}
 		}

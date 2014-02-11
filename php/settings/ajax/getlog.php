@@ -5,13 +5,17 @@
  * See the COPYING-README file.
  */
 
-// Init owncloud
-require_once('../../lib/base.php');
-
 OC_JSON::checkAdminUser();
 
 $count=(isset($_GET['count']))?$_GET['count']:50;
 $offset=(isset($_GET['offset']))?$_GET['offset']:0;
 
-$entries=OC_Log_Owncloud::getEntries($count,$offset);
-OC_JSON::success(array("data" => OC_Util::sanitizeHTML($entries)));
+$entries=OC_Log_Owncloud::getEntries($count, $offset);
+$data = array();
+
+OC_JSON::success(
+	array(
+		"data" => $entries,
+		"remain" => count(OC_Log_Owncloud::getEntries(1, $offset + $count)) !== 0,
+	)
+);

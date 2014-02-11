@@ -1,12 +1,7 @@
 <?php $TRANSLATIONS = array(
 "Pictures" => "Fotoen",
-"Settings" => "Astellungen",
-"Rescan" => "Nei scannen",
-"Stop" => "Stop",
+"Shared by" => "Gedeelt vun",
+"Error loading slideshow template" => "Feeler beim Luede vun der Virlag fir d'Diashow",
 "Share" => "Deelen",
-"Back" => "Zeréck",
-"Remove confirmation" => "Konfirmatioun läschen",
-"Do you want to remove album" => "Wëlls de den Album läschen",
-"Change album name" => "Album Numm änneren",
-"New album name" => "Neien Numm fir den Album"
+"The \"Image Viewer\" application also need to be enabled to use this application." => "D'Biller-Kuck-Applikatioun muss och aktivéiert sinn, fir dës Applikatioun benotzen ze kënnen."
 );

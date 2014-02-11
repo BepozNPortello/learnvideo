@@ -1,27 +1,22 @@
-<?php $TRANSLATIONS = array(
-"OpenID Changed" => "OpenID je izmenjen",
-"Invalid request" => "Neispravan zahtev",
+<?php
+$TRANSLATIONS = array(
+"Authentication error" => "Greška pri autentifikaciji",
 "Language changed" => "Jezik je izmenjen",
+"Invalid request" => "Neispravan zahtev",
+"Error" => "Greška",
+"Groups" => "Grupe",
+"Delete" => "Obriši",
+"Security Warning" => "Bezbednosno upozorenje",
 "Select an App" => "Izaberite program",
-"-licensed" => "-licenciran",
-"by" => "od",
-"Ask a question" => "Postavite pitanje",
-"Problems connecting to help database." => "Problem u povezivanju sa bazom pomoći",
-"Go there manually." => "Otiđite tamo ručno.",
-"Answer" => "Odgovor",
-"You use" => "Koristite",
-"of the available" => "od dostupnih",
-"Your password got changed" => "Vaša lozinka je izmenjena",
+"Password" => "Lozinka",
 "Unable to change your password" => "Ne mogu da izmenim vašu lozinku",
 "Current password" => "Trenutna lozinka",
 "New password" => "Nova lozinka",
-"show" => "prikaži",
 "Change password" => "Izmeni lozinku",
+"Email" => "E-mail",
 "Language" => "Jezik",
-"use this address to connect to your ownCloud in your file manager" => "koristite ovu adresu da bi se povezali na ownCloud putem menadžnjera fajlova",
-"Name" => "Ime",
-"Password" => "Lozinka",
-"Groups" => "Grupe",
 "Create" => "Napravi",
-"Delete" => "Obriši"
+"Other" => "Drugo",
+"Username" => "Korisničko ime"
 );
+$PLURAL_FORMS = "nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);";

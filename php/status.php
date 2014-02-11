@@ -1,10 +1,10 @@
 <?php
 
 /**
-* ownCloud status page. usefull if you want to check from the outside if an owncloud installation exists
+* ownCloud status page. Useful if you want to check from the outside if an ownCloud installation exists
 *
 * @author Frank Karlitschek
-* @copyright 2010 Frank Karlitschek karlitschek@kde.org
+* @copyright 2012 Frank Karlitschek frank@owncloud.org
 *
 * This library is free software; you can redistribute it and/or
 * modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
@@ -21,14 +21,25 @@
 *
 */
 
-$RUNTIME_NOAPPS = TRUE; //no apps, yet
+$RUNTIME_NOAPPS = true; //no apps, yet
 
-require_once('lib/base.php');
+try {
 
-if(OC_Config::getValue('installed')==1) $installed='true'; else $installed='false';
-$values=array('installed'=>$installed,'version'=>implode('.',OC_Util::getVersion()),'versionstring'=>OC_Util::getVersionString(),'edition'=>OC_Util::getEditionString());
+	require_once 'lib/base.php';
 
-echo(json_encode($values));
+	if(OC_Config::getValue('installed')==1) $installed='true'; else $installed='false';
+	$values=array(
+		'installed'=>$installed,
+		'version'=>implode('.', OC_Util::getVersion()),
+		'versionstring'=>OC_Util::getVersionString(),
+		'edition'=>OC_Util::getEditionString());
+	if (OC::$CLI) {
+		print_r($values);
+	} else {
+		echo(json_encode($values));
+	}
 
-
-?>
+} catch (Exception $ex) {
+	OC_Response::setStatus(OC_Response::STATUS_INTERNAL_SERVER_ERROR);
+	\OCP\Util::writeLog('remote', $ex->getMessage(), \OCP\Util::FATAL);
+}

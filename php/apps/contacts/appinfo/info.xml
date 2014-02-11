@@ -3,8 +3,8 @@
 	<id>contacts</id>
 	<name>Contacts</name>
 	<licence>AGPL</licence>
-	<author>Jakob Sack</author>
-	<require>4</require>
+	<author>Jakob Sack,Thomas Tanghus</author>
+	<require>6.00</require>
 	<shipped>true</shipped>
 	<description>Address book with CardDAV support.</description>
 	<standalone/>

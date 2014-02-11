@@ -1,24 +1,24 @@
 <?php
 OCP\JSON::checkAppEnabled('files_versions');
 
-require_once('apps/files_versions/versions.php');
-
-$userDirectory = "/".OCP\USER::getUser()."/files";
 $source = $_GET['source'];
+$start = $_GET['start'];
+list ($uid, $filename) = OCA\Files_Versions\Storage::getUidAndFilename($source);
+$count = 5; //show the newest revisions
+$versions = OCA\Files_Versions\Storage::getVersions($uid, $filename, $source);
+if( $versions ) {
 
-if( OCA_Versions\Storage::isversioned( $source ) ) {
-
-	$count=5; //show the newest revisions
-	$versions = OCA_Versions\Storage::getversions( $source, $count);
-
-	$versionsSorted = array_reverse( $versions );
-	
-	if ( !empty( $versionsSorted ) ) {
-		OCP\JSON::encodedPrint($versionsSorted);
+	$endReached = false;
+	if (count($versions) <= $start+$count) {
+		$endReached = true;
 	}
-	
+
+	$versions = array_slice($versions, $start, $count);
+
+	\OCP\JSON::success(array('data' => array('versions' => $versions, 'endReached' => $endReached)));
+
 } else {
 
-	return;
-	
+	\OCP\JSON::success(array('data' => array('versions' => false, 'endReached' => true)));
+
 }

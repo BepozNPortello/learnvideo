@@ -1,85 +1,183 @@
 <?php
 /**
- * Copyright (c) 2012 Robin Appelman <icewind@owncloud.com>
- * This file is licensed under the Affero General Public License version 3 or
- * later.
- * See the COPYING-README file.
+ * ownCloud
+ *
+ * @author Florin Peter
+ * @copyright 2013 Florin Peter <owncloud@florin-peter.de>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU AFFERO GENERAL PUBLIC LICENSE for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public
+ * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
-class Test_CryptStream extends UnitTestCase {
-	private $tmpFiles=array();
-	
-	function testStream(){
-		$stream=$this->getStream('test1','w',strlen('foobar'));
-		fwrite($stream,'foobar');
-		fclose($stream);
+require_once __DIR__ . '/../../../lib/base.php';
+require_once __DIR__ . '/../lib/crypt.php';
+require_once __DIR__ . '/../lib/keymanager.php';
+require_once __DIR__ . '/../lib/proxy.php';
+require_once __DIR__ . '/../lib/stream.php';
+require_once __DIR__ . '/../lib/util.php';
+require_once __DIR__ . '/../appinfo/app.php';
+require_once __DIR__ . '/util.php';
 
-		$stream=$this->getStream('test1','r',strlen('foobar'));
-		$data=fread($stream,6);
-		fclose($stream);
-		$this->assertEqual('foobar',$data);
+use OCA\Encryption;
 
-		$file=OC::$SERVERROOT.'/3rdparty/MDB2.php';
-		$source=fopen($file,'r');
-		$target=$this->getStream('test2','w',0);
-		OCP\Files::streamCopy($source,$target);
-		fclose($target);
-		fclose($source);
+/**
+ * Class Test_Encryption_Stream
+ * @brief this class provide basic stream tests
+ */
+class Test_Encryption_Stream extends \PHPUnit_Framework_TestCase {
 
-		$stream=$this->getStream('test2','r',filesize($file));
-		$data=stream_get_contents($stream);
-		$original=file_get_contents($file);
-		$this->assertEqual(strlen($original),strlen($data));
-		$this->assertEqual($original,$data);
+	const TEST_ENCRYPTION_STREAM_USER1 = "test-stream-user1";
+
+	public $userId;
+	public $pass;
+	/**
+	 * @var \OC_FilesystemView
+	 */
+	public $view;
+	public $dataShort;
+	public $stateFilesTrashbin;
+
+	public static function setUpBeforeClass() {
+		// reset backend
+		\OC_User::clearBackends();
+		\OC_User::useBackend('database');
+
+		// Filesystem related hooks
+		\OCA\Encryption\Helper::registerFilesystemHooks();
+
+		// clear and register hooks
+		\OC_FileProxy::clearProxies();
+		\OC_FileProxy::register(new OCA\Encryption\Proxy());
+
+		// create test user
+		\Test_Encryption_Util::loginHelper(\Test_Encryption_Stream::TEST_ENCRYPTION_STREAM_USER1, true);
+	}
+
+	function setUp() {
+		// set user id
+		\OC_User::setUserId(\Test_Encryption_Stream::TEST_ENCRYPTION_STREAM_USER1);
+		$this->userId = \Test_Encryption_Stream::TEST_ENCRYPTION_STREAM_USER1;
+		$this->pass = \Test_Encryption_Stream::TEST_ENCRYPTION_STREAM_USER1;
+
+		// init filesystem view
+		$this->view = new \OC_FilesystemView('/');
+
+		// init short data
+		$this->dataShort = 'hats';
+
+		// remember files_trashbin state
+		$this->stateFilesTrashbin = OC_App::isEnabled('files_trashbin');
+
+		// we don't want to tests with app files_trashbin enabled
+		\OC_App::disable('files_trashbin');
+	}
+
+	function tearDown() {
+		// reset app files_trashbin
+		if ($this->stateFilesTrashbin) {
+			OC_App::enable('files_trashbin');
+		}
+		else {
+			OC_App::disable('files_trashbin');
+		}
+	}
+
+	public static function tearDownAfterClass() {
+		// cleanup test user
+		\OC_User::deleteUser(\Test_Encryption_Stream::TEST_ENCRYPTION_STREAM_USER1);
+	}
+
+	function testStreamOptions() {
+		$filename = '/tmp-' . uniqid();
+		$view = new \OC\Files\View('/' . $this->userId . '/files');
+
+		// Save short data as encrypted file using stream wrapper
+		$cryptedFile = $view->file_put_contents($filename, $this->dataShort);
+
+		// Test that data was successfully written
+		$this->assertTrue(is_int($cryptedFile));
+
+		$handle = $view->fopen($filename, 'r');
+
+		// check if stream is at position zero
+		$this->assertEquals(0, ftell($handle));
+
+		// set stream options
+		$this->assertTrue(flock($handle, LOCK_SH));
+		$this->assertTrue(flock($handle, LOCK_UN));
+
+		// tear down
+		$view->unlink($filename);
+	}
+
+	function testStreamSetBlocking() {
+		$filename = '/tmp-' . uniqid();
+		$view = new \OC\Files\View('/' . $this->userId . '/files');
+
+		// Save short data as encrypted file using stream wrapper
+		$cryptedFile = $view->file_put_contents($filename, $this->dataShort);
+
+		// Test that data was successfully written
+		$this->assertTrue(is_int($cryptedFile));
+
+		$handle = $view->fopen($filename, 'r');
+
+		// set stream options
+		$this->assertTrue(stream_set_blocking($handle, 1));
+
+		// tear down
+		$view->unlink($filename);
 	}
 
 	/**
-	 * get a cryptstream to a temporary file
-	 * @param string $id
-	 * @param string $mode
-	 * @param int size
-	 * @return resource
+	 * @medium
 	 */
-	function getStream($id,$mode,$size){
-		if($id===''){
-			$id=uniqid();
-		}
-		if(!isset($this->tmpFiles[$id])){
-			$file=OCP\Files::tmpFile();
-			$this->tmpFiles[$id]=$file;
-		}else{
-			$file=$this->tmpFiles[$id];
-		}
-		$stream=fopen($file,$mode);
-		OC_CryptStream::$sourceStreams[$id]=array('path'=>'dummy'.$id,'stream'=>$stream,'size'=>$size);
-		return fopen('crypt://streams/'.$id,$mode);
+	function testStreamSetTimeout() {
+		$filename = '/tmp-' . uniqid();
+		$view = new \OC\Files\View('/' . $this->userId . '/files');
+
+		// Save short data as encrypted file using stream wrapper
+		$cryptedFile = $view->file_put_contents($filename, $this->dataShort);
+
+		// Test that data was successfully written
+		$this->assertTrue(is_int($cryptedFile));
+
+		$handle = $view->fopen($filename, 'r');
+
+		// set stream options
+		$this->assertFalse(stream_set_timeout($handle, 1));
+
+		// tear down
+		$view->unlink($filename);
 	}
 
-	function testBinary(){
-		$file=__DIR__.'/binary';
-		$source=file_get_contents($file);
+	function testStreamSetWriteBuffer() {
+		$filename = '/tmp-' . uniqid();
+		$view = new \OC\Files\View('/' . $this->userId . '/files');
 
-		$stream=$this->getStream('test','w',strlen($source));
-		fwrite($stream,$source);
-		fclose($stream);
+		// Save short data as encrypted file using stream wrapper
+		$cryptedFile = $view->file_put_contents($filename, $this->dataShort);
 
-		$stream=$this->getStream('test','r',strlen($source));
-		$data=stream_get_contents($stream);
-		fclose($stream);
-		$this->assertEqual(strlen($data),strlen($source));
-		$this->assertEqual($source,$data);
+		// Test that data was successfully written
+		$this->assertTrue(is_int($cryptedFile));
 
-		$file=__DIR__.'/zeros';
-		$source=file_get_contents($file);
+		$handle = $view->fopen($filename, 'r');
 
-		$stream=$this->getStream('test2','w',strlen($source));
-		fwrite($stream,$source);
-		fclose($stream);
+		// set stream options
+		$this->assertEquals(0, stream_set_write_buffer($handle, 1024));
 
-		$stream=$this->getStream('test2','r',strlen($source));
-		$data=stream_get_contents($stream);
-		fclose($stream);
-		$this->assertEqual(strlen($data),strlen($source));
-		$this->assertEqual($source,$data);
+		// tear down
+		$view->unlink($filename);
 	}
 }

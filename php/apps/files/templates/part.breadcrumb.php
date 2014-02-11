@@ -1,6 +1,13 @@
-	<?php for($i=0; $i<count($_["breadcrumb"]); $i++):
-        $crumb = $_["breadcrumb"][$i]; ?>
-		<div class="crumb <?php if($i == count($_["breadcrumb"])-1) echo 'last';?> svg" data-dir='<?php echo $crumb["dir"];?>' style='background-image:url("<?php echo OCP\image_path('core','breadcrumb.png');?>")'>
-    		<a href="<?php echo $_['baseURL'].$crumb["dir"]; ?>"><?php echo htmlentities($crumb["name"],ENT_COMPAT,'utf-8'); ?></a>
-		</div>
-	<?php endfor;?>
+<div class="crumb <?php if(!count($_["breadcrumb"])) p('last');?>" data-dir=''>
+	<a href="<?php print_unescaped($_['baseURL']); ?>">
+		<img src="<?php print_unescaped(OCP\image_path('core', 'places/home.svg'));?>" class="svg" />
+	</a>
+</div>
+<?php for($i=0; $i<count($_["breadcrumb"]); $i++):
+	$crumb = $_["breadcrumb"][$i];
+	$dir = \OCP\Util::encodePath($crumb["dir"]); ?>
+	<div class="crumb <?php if($i == count($_["breadcrumb"])-1) p('last');?> svg"
+		 data-dir='<?php p($dir);?>'>
+	<a href="<?php p($_['baseURL'].$dir); ?>"><?php p($crumb["name"]); ?></a>
+	</div>
+<?php endfor;

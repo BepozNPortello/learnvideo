@@ -1,12 +1,10 @@
 <?php $TRANSLATIONS = array(
 "Pictures" => "Images",
-"Settings" => "Préférences",
-"Rescan" => "Analyser à nouveau",
-"Stop" => "Arrêter",
+"Shared by" => "Partagé par",
+"Picture view" => "Visualisation de l'image",
+"Error loading slideshow template" => "Erreur lors du téléchargement du gabarit de diaporama ",
 "Share" => "Partager",
-"Back" => "Retour",
-"Remove confirmation" => "Enlever la confirmation",
-"Do you want to remove album" => "Voulez-vous supprimer l'album",
-"Change album name" => "Modifier le nom de l'album",
-"New album name" => "Nouveau nom de l'album"
+"The \"Image Viewer\" application also need to be enabled to use this application." => "L'application \"Visualiseur d'Image\" nécessite également d'être activée pour utiliser cette application.",
+"%s shared <strong>%s</strong> with you" => "%s partagé <strong>%s</strong> avec vous",
+"File list" => "Liste des fichiers"
 );

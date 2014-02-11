@@ -12,14 +12,10 @@ Running on OpenShift
 
 Create an account at http://openshift.redhat.com/
 
-Create a PHP application
+Create a PHP application with a MySQL cartridge:
 
-	rhc app create -a owncloud -t php-5.3
+	rhc app create owncloud php-5.3 mysql-5.1 cron-1.4
 
-Add MySQL support to your application
-    
-	rhc cartridge add -a owncloud -c mysql-5.1
-    
 Add this upstream ownCloud quickstart repo
 
 	cd owncloud
@@ -44,7 +40,7 @@ Default Credentials
 
 To download clients that will sync your ownCloud instance with desktop clients, visit http://owncloud.org/sync-clients/
 
-To give your new planet site a web address of its own, add your desired alias:
+To give your new ownCloud site a web address of its own, add your desired alias:
 
 	rhc app add-alias -a owncloud --alias "$whatever.$mydomain.com"
 

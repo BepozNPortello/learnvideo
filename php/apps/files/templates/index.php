@@ -1,79 +1,110 @@
-<!--[if IE 8]><style>input[type="checkbox"]{padding:0;}table td{position:static !important;}</style><![endif]-->
 <div id="controls">
-	<?php echo($_['breadcrumb']); ?>
-	<?php if (!isset($_['readonly']) || !$_['readonly']):?>
-		<div class="actions <?php if (isset($_['files']) and ! $_['readonly'] and count($_['files'])==0):?>emptyfolder<?php endif; ?>">
-			<div id='new' class='button'>
-				<a><?php echo $l->t('New');?></a>
-				<ul class="popup popupTop">
-					<li style="background-image:url('<?php echo OCP\mimetype_icon('text/plain') ?>')" data-type='file'><p><?php echo $l->t('Text file');?></p></li>
-					<li style="background-image:url('<?php echo OCP\mimetype_icon('dir') ?>')" data-type='folder'><p><?php echo $l->t('Folder');?></p></li>
-					<li style="background-image:url('<?php echo OCP\image_path('core','actions/public.png') ?>')" data-type='web'><p><?php echo $l->t('From url');?></p></li>
+	<?php print_unescaped($_['breadcrumb']); ?>
+		<div class="actions creatable <?php if (!$_['isCreatable']):?>hidden<?php endif; ?>">
+			<div id="new" class="button">
+				<a><?php p($l->t('New'));?></a>
+				<ul>
+					<li style="background-image:url('<?php p(OCP\mimetype_icon('text/plain')) ?>')"
+						data-type='file' data-newname='<?php p($l->t('New text file')) ?>.txt'><p><?php p($l->t('Text file'));?></p></li>
+					<li style="background-image:url('<?php p(OCP\mimetype_icon('dir')) ?>')"
+						data-type='folder' data-newname='<?php p($l->t('New folder')) ?>'><p><?php p($l->t('Folder'));?></p></li>
+					<li style="background-image:url('<?php p(OCP\image_path('core', 'places/link.svg')) ?>')"
+						data-type='web'><p><?php p($l->t('From link'));?></p></li>
 				</ul>
 			</div>
-			<div class="file_upload_wrapper svg">
-				<form data-upload-id='1' class="file_upload_form" action="<?php echo OCP\Util::linkTo('files', 'ajax/upload.php'); ?>" method="post" enctype="multipart/form-data" target="file_upload_target_1">
-					<input type="hidden" name="MAX_FILE_SIZE" value="<?php echo $_['uploadMaxFilesize'] ?>" id="max_upload">
-					<input type="hidden" class="max_human_file_size" value="(max <?php echo $_['uploadMaxHumanFilesize']; ?>)">
-					<input type="hidden" name="dir" value="<?php echo htmlentities($_['dir'],ENT_COMPAT,'utf-8') ?>" id="dir">
-					<button class="file_upload_filename">&nbsp;<img class='svg action' alt="Upload" src="<?php echo OCP\image_path("core", "actions/upload-white.svg"); ?>" /></button>
-					<input class="file_upload_start" type="file" name='files[]'/>
-						<a href="#" class="file_upload_button_wrapper" onclick="return false;" title="<?php echo $l->t('Upload'); echo  ' max. '.$_['uploadMaxHumanFilesize'] ?>"></a>
-					<iframe name="file_upload_target_1" class='file_upload_target' src=""></iframe>
-				</form>
+			<div id="upload" class="button"
+				 title="<?php p($l->t('Upload') . ' max. '.$_['uploadMaxHumanFilesize']) ?>">
+					<?php if($_['uploadMaxFilesize'] >= 0):?>
+					<input type="hidden" name="MAX_FILE_SIZE" id="max_upload"
+						   value="<?php p($_['uploadMaxFilesize']) ?>">
+					<?php endif;?>
+					<input type="hidden" class="max_human_file_size"
+						   value="(max <?php p($_['uploadMaxHumanFilesize']); ?>)">
+					<input type="hidden" name="dir" value="<?php p($_['dir']) ?>" id="dir">
+					<input type="file" id="file_upload_start" name='files[]'
+						   data-url="<?php print_unescaped(OCP\Util::linkTo('files', 'ajax/upload.php')); ?>" />
+					<a href="#" class="svg"></a>
 			</div>
-					<div id="upload">
-						<div id="uploadprogressbar"></div>
-						<input type="button" class="stop" style="display:none" value="<?php echo $l->t('Cancel upload');?>" onclick="javascript:Files.cancelUploads();" />
-					</div>
-
+			<?php if ($_['trash']): ?>
+			<input id="trash" type="button" value="<?php p($l->t('Deleted files'));?>" class="button" <?php $_['trashEmpty'] ? p('disabled') : '' ?>></input>
+			<?php endif; ?>
+			<div id="uploadprogresswrapper">
+				<div id="uploadprogressbar"></div>
+				<input type="button" class="stop" style="display:none"
+					value="<?php p($l->t('Cancel upload'));?>"
+				/>
+			</div>
 		</div>
 		<div id="file_action_panel"></div>
-	<?php else:?>
-		<input type="hidden" name="dir" value="<?php echo $_['dir'] ?>" id="dir">
-	<?php endif;?>
+		<div class="notCreatable notPublic <?php if ($_['isCreatable'] or $_['isPublic'] ):?>hidden<?php endif; ?>">
+			<?php p($l->t('You don’t have permission to upload or create files here'))?>
+		</div>
+	<input type="hidden" name="permissions" value="<?php p($_['permissions']); ?>" id="permissions">
 </div>
-<div id='notification'></div>
 
-<?php if (isset($_['files']) and ! $_['readonly'] and count($_['files'])==0):?>
-	<div id="emptyfolder"><?php echo $l->t('Nothing in here. Upload something!')?></div>
-<?php endif; ?>
+<div id="emptycontent" <?php if (!$_['emptyContent']):?>class="hidden"<?php endif; ?>><?php p($l->t('Nothing in here. Upload something!'))?></div>
 
-<table>
+<input type="hidden" id="disableSharing" data-status="<?php p($_['disableSharing']); ?>"></input>
+
+<table id="filestable" data-allow-public-upload="<?php p($_['publicUploadEnabled'])?>" data-preview-x="36" data-preview-y="36">
 	<thead>
 		<tr>
-			<th id='headerName'>
-				<?php if(!isset($_['readonly']) || !$_['readonly']) { ?><input type="checkbox" id="select_all" /><?php } ?>
-				<span class='name'><?php echo $l->t( 'Name' ); ?></span>
-				<span class='selectedActions'>
-<!-- 					<a href="" class="share"><img class='svg' alt="Share" src="<?php echo OCP\image_path("core", "actions/share.svg"); ?>" /> <?php echo $l->t('Share')?></a> -->
-					<?php if($_['allowZipDownload']) : ?>
-						<a href="" class="download"><img class='svg' alt="Download" src="<?php echo OCP\image_path("core", "actions/download.svg"); ?>" /> <?php echo $l->t('Download')?></a>
-					<?php endif; ?>
-				</span>
+			<th <?php if (!$_['fileHeader']):?>class="hidden"<?php endif; ?> id='headerName'>
+				<div id="headerName-container">
+					<input type="checkbox" id="select_all" />
+					<label for="select_all"></label>
+					<span class="name"><?php p($l->t( 'Name' )); ?></span>
+					<span class="selectedActions">
+						<?php if($_['allowZipDownload']) : ?>
+							<a href="" class="download">
+								<img class="svg" alt="Download"
+									 src="<?php print_unescaped(OCP\image_path("core", "actions/download.svg")); ?>" />
+								<?php p($l->t('Download'))?>
+							</a>
+						<?php endif; ?>
+					</span>
+				</div>
 			</th>
-			<th id="headerSize"><?php echo $l->t( 'Size' ); ?></th>
-			<th id="headerDate"><span id="modified"><?php echo $l->t( 'Modified' ); ?></span><span class="selectedActions"><a href="" class="delete"><?php echo $l->t('Delete all')?> <img class="svg" alt="<?php echo $l->t('Delete')?>" src="<?php echo OCP\image_path("core", "actions/delete.svg"); ?>" /></a></span></th>
+			<th <?php if (!$_['fileHeader']):?>class="hidden"<?php endif; ?> id="headerSize"><?php p($l->t('Size')); ?></th>
+			<th <?php if (!$_['fileHeader']):?>class="hidden"<?php endif; ?> id="headerDate">
+				<span id="modified"><?php p($l->t( 'Modified' )); ?></span>
+				<?php if ($_['permissions'] & OCP\PERMISSION_DELETE): ?>
+					<span class="selectedActions"><a href="" class="delete-selected">
+						<?php p($l->t('Delete'))?>
+						<img class="svg" alt="<?php p($l->t('Delete'))?>"
+							 src="<?php print_unescaped(OCP\image_path("core", "actions/delete.svg")); ?>" />
+					</a></span>
+				<?php endif; ?>
+			</th>
 		</tr>
 	</thead>
-	<tbody id="fileList" data-readonly="<?php echo $_['readonly'];?>">
-		<?php echo($_['fileList']); ?>
+	<tbody id="fileList">
+		<?php print_unescaped($_['fileList']); ?>
 	</tbody>
 </table>
-<div id="editor"></div>
-<div id="uploadsize-message" title="<?php echo $l->t('Upload too large')?>">
+<div id="editor"></div><!-- FIXME Do not use this div in your app! It is deprecated and will be removed in the future! -->
+<div id="uploadsize-message" title="<?php p($l->t('Upload too large'))?>">
 	<p>
-		<?php echo $l->t('The files you are trying to upload exceed the maximum size for file uploads on this server.');?>
+	<?php p($l->t('The files you are trying to upload exceed the maximum size for file uploads on this server.'));?>
 	</p>
 </div>
 <div id="scanning-message">
 	<h3>
-		<?php echo $l->t('Files are being scanned, please wait.');?> <span id='scan-count'></span>
+		<?php p($l->t('Files are being scanned, please wait.'));?> <span id='scan-count'></span>
 	</h3>
 	<p>
-		<?php echo $l->t('Current scanning');?> <span id='scan-current'></span>
+		<?php p($l->t('Current scanning'));?> <span id='scan-current'></span>
 	</p>
 </div>
 
 <!-- config hints for javascript -->
-<input type="hidden" name="allowZipDownload" id="allowZipDownload" value="<?php echo $_['allowZipDownload']; ?>" />
+<input type="hidden" name="filesApp" id="filesApp" value="1" />
+<input type="hidden" name="ajaxLoad" id="ajaxLoad" value="<?php p($_['ajaxLoad']); ?>" />
+<input type="hidden" name="allowZipDownload" id="allowZipDownload" value="<?php p($_['allowZipDownload']); ?>" />
+<input type="hidden" name="usedSpacePercent" id="usedSpacePercent" value="<?php p($_['usedSpacePercent']); ?>" />
+<?php if (!$_['isPublic']) :?>
+<input type="hidden" name="encryptedFiles" id="encryptedFiles" value="<?php $_['encryptedFiles'] ? p('1') : p('0'); ?>" />
+<input type="hidden" name="encryptedInitStatus" id="encryptionInitStatus" value="<?php p($_['encryptionInitStatus']) ?>" />
+<input type="hidden" name="mailNotificationEnabled" id="mailNotificationEnabled" value="<?php p($_['mailNotificationEnabled']) ?>" />
+<input type="hidden" name="allowShareWithLink" id="allowShareWithLink" value="<?php p($_['allowShareWithLink']) ?>" />
+<?php endif;

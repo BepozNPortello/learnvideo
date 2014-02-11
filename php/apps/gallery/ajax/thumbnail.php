@@ -1,35 +1,47 @@
 <?php
-
 /**
-* ownCloud - gallery application
-*
-* @author Bartek Przybylski
-* @copyright 2012 Bartek Przybylski bart.p.pl@gmail.com
-* 
-* This library is free software; you can redistribute it and/or
-* modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
-* License as published by the Free Software Foundation; either 
-* version 3 of the License, or any later version.
-* 
-* This library is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU AFFERO GENERAL PUBLIC LICENSE for more details.
-*  
-* You should have received a copy of the GNU Lesser General Public 
-* License along with this library.  If not, see <http://www.gnu.org/licenses/>.
-* 
-*/
- 
-OCP\JSON::checkLoggedIn();
+ * Copyright (c) 2012 Robin Appelman <icewind@owncloud.com>
+ * This file is licensed under the Affero General Public License version 3 or
+ * later.
+ * See the COPYING-README file.
+ */
+
 OCP\JSON::checkAppEnabled('gallery');
-require_once('apps/gallery/lib/managers.php');
 
+list($token, $img) = explode('/', $_GET['file'], 2);
+$linkItem = \OCP\Share::getShareByToken($token);
+if (is_array($linkItem) && isset($linkItem['uid_owner'])) {
+	// seems to be a valid share
+	$rootLinkItem = \OCP\Share::resolveReShare($linkItem);
+	$owner = $rootLinkItem['uid_owner'];
+	OCP\JSON::checkUserExists($owner);
+	OC_Util::tearDownFS();
+	OC_Util::setupFS($owner);
+} else {
+	OCP\JSON::checkLoggedIn();
 
-$img = $_GET['filepath'];
-
-$image = \OC\Pictures\ThumbnailsManager::getInstance()->getThumbnail($img);
-if ($image) {
-	OCP\Response::enableCaching(3600 * 24); // 24 hour
-	$image->show();
+	list($owner, $img) = explode('/', $_GET['file'], 2);
+	if ($owner !== OCP\User::getUser()) {
+		OCP\JSON::checkUserExists($owner);
+		OC_Util::setupFS($owner);
+		$view = new \OC\Files\View('/' . $owner . '/files');
+		// second part is the (duplicated) share name
+		list($folderId,, $img) = explode('/', $img, 3);
+		$sharedFolder = $view->getPath($folderId);
+		$img = $sharedFolder . '/' . $img;
+	}
 }
+
+session_write_close();
+
+if (is_array($linkItem) && isset($linkItem['uid_owner'])) {
+	// prepend path to share
+	$ownerView = new \OC\Files\View('/' . $owner . '/files');
+	$path = $ownerView->getPath($linkItem['file_source']);
+	$img = $path . '/' . $img;
+}
+
+$square = isset($_GET['square']) ? (bool)$_GET['square'] : false;
+
+$image = new \OCA\Gallery\Thumbnail('/' . $img, $owner, $square);
+$image->show();

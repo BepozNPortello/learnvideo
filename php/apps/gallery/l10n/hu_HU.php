@@ -1,12 +1,10 @@
 <?php $TRANSLATIONS = array(
 "Pictures" => "Képek",
-"Settings" => "Beállítások",
-"Rescan" => "Újravizsgálás",
-"Stop" => "Állj",
+"Shared by" => "Megosztotta Önnel",
+"Picture view" => "Képnézet",
+"Error loading slideshow template" => "Hiba történt a diasor sablonjának betöltésekor",
 "Share" => "Megosztás",
-"Back" => "Vissza",
-"Remove confirmation" => "Megerősítés eltávolítása",
-"Do you want to remove album" => "El akarja távolítani az albumot?",
-"Change album name" => "Albumnév megváltoztatása",
-"New album name" => "Új albumnév"
+"The \"Image Viewer\" application also need to be enabled to use this application." => "A képnézegető alkalmazásnak is engedélyezve kell lennie az alkalmazás használatához.",
+"%s shared <strong>%s</strong> with you" => "%s megosztotta veled ezt: <strong>%s</strong>",
+"File list" => "Fájllista"
 );

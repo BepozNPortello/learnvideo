@@ -4,7 +4,9 @@
  * ownCloud - user_ldap
  *
  * @author Dominik Schmidt
+ * @author Arthur Schiwon
  * @copyright 2011 Dominik Schmidt dev@dominik-schmidt.de
+ * @copyright 2012-2013 Arthur Schiwon blizzz@owncloud.com
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU AFFERO GENERAL PUBLIC LICENSE
@@ -20,42 +22,55 @@
  * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
-$params = array('ldap_host', 'ldap_port', 'ldap_dn', 'ldap_agent_password', 'ldap_base', 'ldap_base_users', 'ldap_base_groups', 'ldap_userlist_filter', 'ldap_login_filter', 'ldap_group_filter', 'ldap_display_name', 'ldap_group_display_name', 'ldap_tls', 'ldap_nocase', 'ldap_quota_def', 'ldap_quota_attr', 'ldap_email_attr', 'ldap_group_member_assoc_attribute');
 
-OCP\Util::addscript('user_ldap', 'settings');
+OC_Util::checkAdminUser();
 
-if ($_POST) {
-	foreach($params as $param){
-		if(isset($_POST[$param])){
-			if('ldap_agent_password' == $param) {
-				OCP\Config::setAppValue('user_ldap', $param, base64_encode($_POST[$param]));
-			} else {
-				OCP\Config::setAppValue('user_ldap', $param, $_POST[$param]);
-			}
-		}
-		elseif('ldap_tls' == $param) {
-			// unchecked checkboxes are not included in the post paramters
-				OCP\Config::setAppValue('user_ldap', $param, 0);
-		}
-		elseif('ldap_nocase' == $param) {
-			OCP\Config::setAppValue('user_ldap', $param, 0);
-		}
-
-	}
-}
+OCP\Util::addScript('user_ldap', 'settings');
+OCP\Util::addScript('core', 'jquery.multiselect');
+OCP\Util::addStyle('user_ldap', 'settings');
+OCP\Util::addStyle('core', 'jquery.multiselect');
+OCP\Util::addStyle('core', 'jquery-ui-1.10.0.custom');
 
 // fill template
-$tmpl = new OCP\Template( 'user_ldap', 'settings');
-foreach($params as $param){
-		$value = htmlentities(OCP\Config::getAppValue('user_ldap', $param,''));
-		$tmpl->assign($param, $value);
+$tmpl = new OCP\Template('user_ldap', 'settings');
+
+$prefixes = \OCA\user_ldap\lib\Helper::getServerConfigurationPrefixes();
+$hosts = \OCA\user_ldap\lib\Helper::getServerConfigurationHosts();
+
+$wizardHtml = '';
+$toc = array();
+
+$wControls = new OCP\Template('user_ldap', 'part.wizardcontrols');
+$wControls = $wControls->fetchPage();
+$sControls = new OCP\Template('user_ldap', 'part.settingcontrols');
+$sControls = $sControls->fetchPage();
+
+$wizTabs = array();
+$wizTabs[] = array('tpl' => 'part.wizard-server',      'cap' => 'Server');
+$wizTabs[] = array('tpl' => 'part.wizard-userfilter',  'cap' => 'User Filter');
+$wizTabs[] = array('tpl' => 'part.wizard-loginfilter', 'cap' => 'Login Filter');
+$wizTabs[] = array('tpl' => 'part.wizard-groupfilter', 'cap' => 'Group Filter');
+
+for($i = 0; $i < count($wizTabs); $i++) {
+	$tab = new OCP\Template('user_ldap', $wizTabs[$i]['tpl']);
+	if($i === 0) {
+		$tab->assign('serverConfigurationPrefixes', $prefixes);
+		$tab->assign('serverConfigurationHosts', $hosts);
+	}
+	$tab->assign('wizardControls', $wControls);
+	$wizardHtml .= $tab->fetchPage();
+	$toc['#ldapWizard'.($i+1)] = $wizTabs[$i]['cap'];
 }
 
-// settings with default values
-$tmpl->assign( 'ldap_port', OCP\Config::getAppValue('user_ldap', 'ldap_port', '389'));
-$tmpl->assign( 'ldap_display_name', OCP\Config::getAppValue('user_ldap', 'ldap_display_name', 'uid'));
-$tmpl->assign( 'ldap_group_display_name', OCP\Config::getAppValue('user_ldap', 'ldap_group_display_name', 'cn'));
-$tmpl->assign( 'ldap_group_member_assoc_attribute', OCP\Config::getAppValue('user_ldap', 'ldap_group_member_assoc_attribute', 'uniqueMember'));
-$tmpl->assign( 'ldap_agent_password', base64_decode(OCP\Config::getAppValue('user_ldap', 'ldap_agent_password')));
+$tmpl->assign('tabs', $wizardHtml);
+$tmpl->assign('toc', $toc);
+$tmpl->assign('settingControls', $sControls);
+
+// assign default values
+$config = new \OCA\user_ldap\lib\Configuration('', false);
+$defaults = $config->getDefaults();
+foreach($defaults as $key => $default) {
+    $tmpl->assign($key.'_default', $default);
+}
 
 return $tmpl->fetchPage();

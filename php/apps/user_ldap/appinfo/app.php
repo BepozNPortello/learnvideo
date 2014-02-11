@@ -21,15 +21,25 @@
 *
 */
 
-require_once('apps/user_ldap/lib_ldap.php');
-require_once('apps/user_ldap/user_ldap.php');
-require_once('apps/user_ldap/group_ldap.php');
+OCP\App::registerAdmin('user_ldap', 'settings');
 
-OCP\App::registerAdmin('user_ldap','settings');
+$configPrefixes = OCA\user_ldap\lib\Helper::getServerConfigurationPrefixes(true);
+$ldapWrapper = new OCA\user_ldap\lib\LDAP();
+if(count($configPrefixes) === 1) {
+	$connector = new OCA\user_ldap\lib\Connection($ldapWrapper, $configPrefixes[0]);
+	$ldapAccess = new OCA\user_ldap\lib\Access($connector, $ldapWrapper);
+	$userBackend  = new OCA\user_ldap\USER_LDAP($ldapAccess);
+	$groupBackend = new OCA\user_ldap\GROUP_LDAP($ldapAccess);
+} else if(count($configPrefixes) > 1) {
+	$userBackend  = new OCA\user_ldap\User_Proxy($configPrefixes, $ldapWrapper);
+	$groupBackend  = new OCA\user_ldap\Group_Proxy($configPrefixes, $ldapWrapper);
+}
 
-// register user backend
-OC_User::useBackend( 'LDAP' );
-OC_Group::useBackend( new OC_GROUP_LDAP() );
+if(count($configPrefixes) > 0) {
+	// register user backend
+	OC_User::useBackend($userBackend);
+	OC_Group::useBackend($groupBackend);
+}
 
 // add settings page to navigation
 $entry = array(
@@ -38,3 +48,10 @@ $entry = array(
 	'href' => OCP\Util::linkTo( 'user_ldap', 'settings.php' ),
 	'name' => 'LDAP'
 );
+
+OCP\Backgroundjob::registerJob('OCA\user_ldap\lib\Jobs');
+if(OCP\App::isEnabled('user_webdavauth')) {
+	OCP\Util::writeLog('user_ldap',
+		'user_ldap and user_webdavauth are incompatible. You may experience unexpected behaviour',
+		OCP\Util::WARN);
+}

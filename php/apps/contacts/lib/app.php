@@ -1,204 +1,165 @@
 <?php
 /**
- * Copyright (c) 2011 Bart Visscher bartv@thisnet.nl
+ * Copyright (c) 2013 Thomas Tanghus (thomas@tanghus.net)
  * This file is licensed under the Affero General Public License version 3 or
  * later.
  * See the COPYING-README file.
  */
 
+namespace OCA\Contacts;
+
+use Sabre\VObject,
+	OCP\AppFramework,
+	OCA\Contacts\Controller\AddressBookController,
+	OCA\Contacts\Controller\GroupController,
+	OCA\Contacts\Controller\ContactController,
+	OCA\Contacts\Controller\ContactPhotoController,
+	OCA\Contacts\Controller\SettingsController,
+	OCA\Contacts\Controller\ImportController;
+
 /**
  * This class manages our app actions
+ *
+ * TODO: Merge in Dispatcher
  */
-OC_Contacts_App::$l10n = OC_L10N::get('contacts');
-OC_Contacts_App::$categories = new OC_VCategories('contacts');
-class OC_Contacts_App {
-	/*
-	 * @brief language object for calendar app
-	 */
+App::$l10n = \OC_L10N::get('contacts');
 
-	public static $l10n;
-	/*
-	 * @brief categories of the user
-	 */
+class App {
+
+	/**
+	* @brief Categories of the user
+	* @var OC_VCategories
+	*/
 	public static $categories = null;
 
-	public static function getAddressbook($id) {
-		$addressbook = OC_Contacts_Addressbook::find( $id );
-		if( $addressbook === false || $addressbook['userid'] != OCP\USER::getUser()) {
-			if ($addressbook === false) {
-				OCP\Util::writeLog('contacts', 'Addressbook not found: '. $id, OCP\Util::ERROR);
-				OCP\JSON::error(array('data' => array( 'message' => self::$l10n->t('Addressbook not found.'))));
-			}
-			else {
-				OCP\Util::writeLog('contacts', 'Addressbook('.$id.') is not from '.OCP\USER::getUser(), OCP\Util::ERROR);
-				OCP\JSON::error(array('data' => array( 'message' => self::$l10n->t('This is not your addressbook.'))));
-			}
-			exit();
-		}
-		return $addressbook;
-	}
+	/**
+	 * @brief language object for calendar app
+	 *
+	 * @var OC_L10N
+	 */
+	public static $l10n;
 
-	public static function getContactObject($id) {
-		$card = OC_Contacts_VCard::find( $id );
-		if( $card === false ) {
-			OCP\Util::writeLog('contacts', 'Contact could not be found: '.$id, OCP\Util::ERROR);
-			OCP\JSON::error(array('data' => array( 'message' => self::$l10n->t('Contact could not be found.').' '.$id)));
-			exit();
-		}
+	/**
+	 * An array holding the current users address books.
+	 * @var array
+	 */
+	protected static $addressBooks = array();
+	/**
+	* If backends are added to this map, they will be automatically mapped
+	* to their respective classes, if constructed with the 'getBackend' method.
+	*
+	* @var array
+	*/
+	public static $backendClasses = array(
+		//'ldap' => 'OCA\Contacts\Backend\Ldap',
+		'local' => 'OCA\Contacts\Backend\Database',
+		'shared' => 'OCA\Contacts\Backend\Shared',
+	);
 
-		self::getAddressbook( $card['addressbookid'] );//access check
-		return $card;
+	public function __construct(
+		$user = null,
+		$addressBooksTableName = '*PREFIX*addressbook',
+		$backendsTableName = '*PREFIX*addressbooks_backend',
+		$dbBackend = null
+	) {
+		$this->user = $user ? $user : \OCP\User::getUser();
+		$this->addressBooksTableName = $addressBooksTableName;
+		$this->backendsTableName = $backendsTableName;
+		$this->dbBackend = $dbBackend
+			? $dbBackend
+			: new Backend\Database($user);
 	}
 
 	/**
-	 * @brief Gets the VCard as an OC_VObject
-	 * @returns The card or null if the card could not be parsed.
-	 */
-	public static function getContactVCard($id) {
-		$card = self::getContactObject( $id );
-
-		$vcard = OC_VObject::parse($card['carddata']);
-		// Try to fix cards with missing 'N' field from pre ownCloud 4. Hot damn, this is ugly...
-		if(!is_null($vcard) && !$vcard->__isset('N')) {
-			$version = OCP\App::getAppVersion('contacts');
-			if($version >= 5) {
-				OCP\Util::writeLog('contacts','OC_Contacts_App::getContactVCard. Deprecated check for missing N field', OCP\Util::DEBUG);
-			}
-			OCP\Util::writeLog('contacts','getContactVCard, Missing N field', OCP\Util::DEBUG);
-			if($vcard->__isset('FN')) {
-				OCP\Util::writeLog('contacts','getContactVCard, found FN field: '.$vcard->__get('FN'), OCP\Util::DEBUG);
-				$n = implode(';', array_reverse(array_slice(explode(' ', $vcard->__get('FN')), 0, 2))).';;;';
-				$vcard->setString('N', $n);
-				OC_Contacts_VCard::edit( $id, $vcard);
-			} else { // Else just add an empty 'N' field :-P
-				$vcard->setString('N', 'Unknown;Name;;;');
-			}
+	* Gets backend by name.
+	*
+	* @param string $name
+	* @return \Backend\AbstractBackend
+	*/
+	public function getBackend($name) {
+		$name = $name ? $name : 'local';
+		if (isset(self::$backendClasses[$name])) {
+			return new self::$backendClasses[$name]($this->user);
+		} else {
+			throw new \Exception('No backend for: ' . $name, '404');
 		}
-		if (!is_null($vcard) && !isset($vcard->REV)) {
-			$rev = new DateTime('@'.$card['lastmodified']);
-			$vcard->setString('REV', $rev->format(DateTime::W3C));
-		}
-		return $vcard;
-	}
-
-	public static function getPropertyLineByChecksum($vcard, $checksum) {
-		$line = null;
-		for($i=0;$i<count($vcard->children);$i++) {
-			if(md5($vcard->children[$i]->serialize()) == $checksum ) {
-				$line = $i;
-				break;
-			}
-		}
-		return $line;
 	}
 
 	/**
-	 * @return array of vcard prop => label
+	 * Return all registered address books for current user.
+	 * For now this is hard-coded to using the Database and
+	 * Shared backends, but eventually admins will be able to
+	 * register additional backends, and users will be able to
+	 * subscribe to address books using those backends.
+	 *
+	 * @return AddressBook[]
 	 */
-	public static function getAddPropertyOptions() {
-		$l10n = self::$l10n;
-		return array(
-				'ADR'   => $l10n->t('Address'),
-				'TEL'   => $l10n->t('Telephone'),
-				'EMAIL' => $l10n->t('Email'),
-				'ORG'   => $l10n->t('Organization'),
-		     );
-	}
-
-	/**
-	 * @return types for property $prop
-	 */
-	public static function getTypesOfProperty($prop) {
-		$l = self::$l10n;
-		switch($prop) {
-		case 'ADR':
-			return array(
-				'WORK' => $l->t('Work'),
-				'HOME' => $l->t('Home'),
-			);
-		case 'TEL':
-			return array(
-				'HOME'  =>  $l->t('Home'),
-				'CELL'  =>  $l->t('Mobile'),
-				'WORK'  =>  $l->t('Work'),
-				'TEXT'  =>  $l->t('Text'),
-				'VOICE' =>  $l->t('Voice'),
-				'MSG'   =>  $l->t('Message'),
-				'FAX'   =>  $l->t('Fax'),
-				'VIDEO' =>  $l->t('Video'),
-				'PAGER' =>  $l->t('Pager'),
-			);
-		case 'EMAIL':
-			return array(
-				'WORK' => $l->t('Work'),
-				'HOME' => $l->t('Home'),
-				'INTERNET' => $l->t('Internet'),
-			);
-		}
-	}
-
-	/*
-	 * @brief returns the vcategories object of the user
-	 * @return (object) $vcategories
-	 */
-	protected static function getVCategories() {
-		if (is_null(self::$categories)) {
-			self::$categories = new OC_VCategories('contacts');
-		}
-		return self::$categories;
-	}
-	
-	/*
-	 * @brief returns the categories for the user
-	 * @return (Array) $categories
-	 */
-	public static function getCategories() {
-		$categories = self::$categories->categories();
-		if(count($categories) == 0) {
-			self::scanCategories();
-			$categories = self::$categories->categories();
-		}
-		return $categories;
-	}
-
-	/**
-	 * scan vcards for categories.
-	 * @param $vccontacts VCards to scan. null to check all vcards for the current user.
-	 */
-	public static function scanCategories($vccontacts = null) {
-		if (is_null($vccontacts)) {
-			$vcaddressbooks = OC_Contacts_Addressbook::all(OCP\USER::getUser());
-			if(count($vcaddressbooks) > 0) {
-				$vcaddressbookids = array();
-				foreach($vcaddressbooks as $vcaddressbook) {
-					$vcaddressbookids[] = $vcaddressbook['id'];
+	public function getAddressBooksForUser() {
+		if(!self::$addressBooks) {
+			foreach(array_keys(self::$backendClasses) as $backendName) {
+				$backend = self::getBackend($backendName, $this->user);
+				$addressBooks = $backend->getAddressBooksForUser();
+				if($backendName === 'local' && count($addressBooks) === 0) {
+					$id = $backend->createAddressBook(array('displayname' => self::$l10n->t('Contacts')));
+					if($id !== false) {
+						$addressBook = $backend->getAddressBook($id);
+						$addressBooks = array($addressBook);
+					} else {
+						\OCP\Util::writeLog(
+							'contacts',
+							__METHOD__ . ', Error creating default address book',
+							\OCP\Util::ERROR
+						);
+					}
 				}
-				$vccontacts = OC_Contacts_VCard::all($vcaddressbookids);
+				foreach($addressBooks as $addressBook) {
+					$addressBook['backend'] = $backendName;
+					self::$addressBooks[] = new AddressBook($backend, $addressBook);
+				}
 			}
 		}
-		if(is_array($vccontacts) && count($vccontacts) > 0) {
-			$cards = array();
-			foreach($vccontacts as $vccontact) {
-				$cards[] = $vccontact['carddata'];
-			}
-
-			self::$categories->rescan($cards);
-		}
+		return self::$addressBooks;
 	}
 
 	/**
-	 * check VCard for new categories.
-	 * @see OC_VCategories::loadFromVObject
+	 * Get an address book from a specific backend.
+	 *
+	 * @param string $backendName
+	 * @param string $addressbookid
+	 * @return AddressBook|null
 	 */
-	public static function loadCategoriesFromVCard(OC_VObject $contact) {
-		self::getVCategories()->loadFromVObject($contact, true);
+	public function getAddressBook($backendName, $addressbookid) {
+		//\OCP\Util::writeLog('contacts', __METHOD__ . ': '. $backendName . ', ' . $addressbookid, \OCP\Util::DEBUG);
+		foreach(self::$addressBooks as $addressBook) {
+			if($addressBook->getBackend()->name === $backendName
+				&& $addressBook->getId() === $addressbookid
+			) {
+				return $addressBook;
+			}
+		}
+
+		$backend = self::getBackend($backendName, $this->user);
+		$info = $backend->getAddressBook($addressbookid);
+		if(!$info) {
+			throw new \Exception(self::$l10n->t('Address book not found'), 404);
+		}
+		$addressBook = new AddressBook($backend, $info);
+		self::$addressBooks[] = $addressBook;
+		return $addressBook;
 	}
 
-	public static function setLastModifiedHeader($contact) {
-		$rev = $contact->getAsString('REV');
-		if ($rev) {
-			$rev = DateTime::createFromFormat(DateTime::W3C, $rev);
-			OCP\Response::setLastModifiedHeader($rev);
-		}
+	/**
+	 * Get a Contact from an address book from a specific backend.
+	 *
+	 * @param string $backendName
+	 * @param string $addressbookid
+	 * @param string $id - Contact id
+	 * @return Contact|null
+	 *
+	 */
+	public function getContact($backendName, $addressbookid, $id) {
+		$addressBook = $this->getAddressBook($backendName, $addressbookid);
+		return $addressBook->getChild($id);
 	}
+
 }

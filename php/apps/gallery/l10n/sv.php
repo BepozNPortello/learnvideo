@@ -1,12 +1,7 @@
 <?php $TRANSLATIONS = array(
 "Pictures" => "Bilder",
-"Settings" => "Inställningar",
-"Rescan" => "Sök igen",
-"Stop" => "Stoppa",
+"Shared by" => "Delad av",
+"Error loading slideshow template" => "Fel vid laddning av mallen för bildspelet",
 "Share" => "Dela",
-"Back" => "Tillbaka",
-"Remove confirmation" => "Vill du säkert ta bort",
-"Do you want to remove album" => "Vill du ta bort albumet",
-"Change album name" => "Ändra albumnamnet",
-"New album name" => "Albumnamn"
+"The \"Image Viewer\" application also need to be enabled to use this application." => "Bildvisaren måste också ges möjlighet att använda denna applikation."
 );

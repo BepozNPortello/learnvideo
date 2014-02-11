@@ -1,12 +1,10 @@
 <?php $TRANSLATIONS = array(
 "Pictures" => "Obrázky",
-"Settings" => "Nastavení",
-"Rescan" => "Znovu prohledat",
-"Stop" => "Zastavit",
+"Shared by" => "Sdílí",
+"Picture view" => "Zobrazení obrázku",
+"Error loading slideshow template" => "Chyba při načítání šablony prezentace",
 "Share" => "Sdílet",
-"Back" => "Zpět",
-"Remove confirmation" => "Potvrzení odebrání",
-"Do you want to remove album" => "Chcete odstranit album?",
-"Change album name" => "Změnit název alba",
-"New album name" => "Název nového alba"
+"The \"Image Viewer\" application also need to be enabled to use this application." => "Aplikace \"Prohlížeč obrázků\" musí být také povolena pro použití této aplikace.",
+"%s shared <strong>%s</strong> with you" => "%s sdílel <strong>%s</strong> s vámi",
+"File list" => "Seznam souborů"
 );
