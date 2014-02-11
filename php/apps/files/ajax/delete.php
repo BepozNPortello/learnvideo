@@ -8,7 +8,7 @@ OCP\JSON::callCheck();
 
 // Get data
 $dir = stripslashes($_POST["dir"]);
-$files = isset($_POST["file"]) ? stripslashes($_POST["file"]) : stripslashes($_POST["files"]);
+$files = isset($_POST["file"]) ? $_POST["file"] : $_POST["files"];
 
 $files = json_decode($files);
 $filesWithError = '';
@@ -24,7 +24,7 @@ foreach ($files as $file) {
 }
 
 // get array with updated storage stats (e.g. max file size) after upload
-$storageStats = \OCA\files\lib\Helper::buildFileStorageStatistics($dir);
+$storageStats = \OCA\Files\Helper::buildFileStorageStatistics($dir);
 
 if ($success) {
 	OCP\JSON::success(array("data" => array_merge(array("dir" => $dir, "files" => $files), $storageStats)));

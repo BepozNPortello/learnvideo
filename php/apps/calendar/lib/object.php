@@ -12,7 +12,7 @@
  * The following SQL statement is just a help for developers and will not be
  * executed!
  *
- * CREATE TABLE calendar_objects (
+ * CREATE TABLE clndr_objects (
  *     id INTEGER UNSIGNED NOT NULL PRIMARY KEY AUTO_INCREMENT,
  *     calendarid INTEGER UNSIGNED NOT NULL,
  *     objecttype VARCHAR(40) NOT NULL,
@@ -40,7 +40,7 @@ class OC_Calendar_Object{
 	 * ['calendardata']
 	 */
 	public static function all($id) {
-		$stmt = OCP\DB::prepare( 'SELECT * FROM `*PREFIX*calendar_objects` WHERE `calendarid` = ?' );
+		$stmt = OCP\DB::prepare( 'SELECT * FROM `*PREFIX*clndr_objects` WHERE `calendarid` = ?' );
 		$result = $stmt->execute(array($id));
 
 		$calendarobjects = array();
@@ -62,14 +62,14 @@ class OC_Calendar_Object{
 	 * in ['calendardata']
 	 */
 	public static function allInPeriod($id, $start, $end) {
-		$stmt = OCP\DB::prepare( 'SELECT * FROM `*PREFIX*calendar_objects` WHERE `calendarid` = ?'
-		.' AND ((`startdate` >= ? AND `startdate` <= ? AND `repeating` = 0)'
-		.' OR (`enddate` >= ? AND `enddate` <= ? AND `repeating` = 0)'
-		.' OR (`startdate` <= ? AND `repeating` = 1))' );
+		$stmt = OCP\DB::prepare( 'SELECT * FROM `*PREFIX*clndr_objects` WHERE `calendarid` = ? AND `objecttype`= ?' 
+		.' AND ((`startdate` >= ? AND `enddate` <= ? AND `repeating` = 0)'
+		.' OR (`enddate` >= ? AND `startdate` <= ? AND `repeating` = 0)'
+		.' OR (`startdate` <= ? AND `repeating` = 1) )' );
 		$start = self::getUTCforMDB($start);
 		$end = self::getUTCforMDB($end);
-		$result = $stmt->execute(array($id,
-					$start, $end,
+		$result = $stmt->execute(array($id,'VEVENT',
+					$start, $end,					
 					$start, $end,
 					$end));
 
@@ -87,7 +87,7 @@ class OC_Calendar_Object{
 	 * @return associative array
 	 */
 	public static function find($id) {
-		$stmt = OCP\DB::prepare( 'SELECT * FROM `*PREFIX*calendar_objects` WHERE `id` = ?' );
+		$stmt = OCP\DB::prepare( 'SELECT * FROM `*PREFIX*clndr_objects` WHERE `id` = ?' );
 		$result = $stmt->execute(array($id));
 
 		return $result->fetchRow();
@@ -100,7 +100,7 @@ class OC_Calendar_Object{
 	 * @return associative array
 	 */
 	public static function findWhereDAVDataIs($cid,$uri) {
-		$stmt = OCP\DB::prepare( 'SELECT * FROM `*PREFIX*calendar_objects` WHERE `calendarid` = ? AND `uri` = ?' );
+		$stmt = OCP\DB::prepare( 'SELECT * FROM `*PREFIX*clndr_objects` WHERE `calendarid` = ? AND `uri` = ?' );
 		$result = $stmt->execute(array($cid,$uri));
 
 		return $result->fetchRow();
@@ -134,9 +134,9 @@ class OC_Calendar_Object{
 
 		$uri = 'owncloud-'.md5($data.rand().time()).'.ics';
 
-		$stmt = OCP\DB::prepare( 'INSERT INTO `*PREFIX*calendar_objects` (`calendarid`,`objecttype`,`startdate`,`enddate`,`repeating`,`summary`,`calendardata`,`uri`,`lastmodified`) VALUES(?,?,?,?,?,?,?,?,?)' );
+		$stmt = OCP\DB::prepare( 'INSERT INTO `*PREFIX*clndr_objects` (`calendarid`,`objecttype`,`startdate`,`enddate`,`repeating`,`summary`,`calendardata`,`uri`,`lastmodified`) VALUES(?,?,?,?,?,?,?,?,?)' );
 		$stmt->execute(array($id,$type,$startdate,$enddate,$repeating,$summary,$data,$uri,time()));
-		$object_id = OCP\DB::insertid('*PREFIX*calendar_objects');
+		$object_id = OCP\DB::insertid('*PREFIX*clndr_objects');
 
 		OC_Calendar_App::loadCategoriesFromVCalendar($object_id, $object);
 
@@ -167,9 +167,9 @@ class OC_Calendar_Object{
 		$object = OC_VObject::parse($data);
 		list($type,$startdate,$enddate,$summary,$repeating,$uid) = self::extractData($object);
 
-		$stmt = OCP\DB::prepare( 'INSERT INTO `*PREFIX*calendar_objects` (`calendarid`,`objecttype`,`startdate`,`enddate`,`repeating`,`summary`,`calendardata`,`uri`,`lastmodified`) VALUES(?,?,?,?,?,?,?,?,?)' );
+		$stmt = OCP\DB::prepare( 'INSERT INTO `*PREFIX*clndr_objects` (`calendarid`,`objecttype`,`startdate`,`enddate`,`repeating`,`summary`,`calendardata`,`uri`,`lastmodified`) VALUES(?,?,?,?,?,?,?,?,?)' );
 		$stmt->execute(array($id,$type,$startdate,$enddate,$repeating,$summary,$data,$uri,time()));
-		$object_id = OCP\DB::insertid('*PREFIX*calendar_objects');
+		$object_id = OCP\DB::insertid('*PREFIX*clndr_objects');
 
 		OC_Calendar_Calendar::touchCalendar($id);
 		OCP\Util::emitHook('OC_Calendar', 'addEvent', $object_id);
@@ -184,12 +184,13 @@ class OC_Calendar_Object{
 	 */
 	public static function edit($id, $data) {
 		$oldobject = self::find($id);
-
-		$calendar = OC_Calendar_Calendar::find($oldobject['calendarid']);
+		$calid = self::getCalendarid($id);
+		
+		$calendar = OC_Calendar_Calendar::find($calid);
 		$oldvobject = OC_VObject::parse($oldobject['calendardata']);
 		if ($calendar['userid'] != OCP\User::getUser()) {
-			$sharedCalendar = OCP\Share::getItemSharedWithBySource('calendar', $id);
-			$sharedAccessClassPermissions = OC_Calendar_App::getAccessClassPermissions($oldvobject->VEVENT->CLASS->value);
+			$sharedCalendar = OCP\Share::getItemSharedWithBySource('calendar', $calid); //calid, not objectid !!!! 1111 one one one eleven
+			$sharedAccessClassPermissions = OC_Calendar_Object::getAccessClassPermissions($oldvobject);
 			if (!$sharedCalendar || !($sharedCalendar['permissions'] & OCP\PERMISSION_UPDATE) || !($sharedAccessClassPermissions & OCP\PERMISSION_UPDATE)) {
 				throw new Exception(
 					OC_Calendar_App::$l10n->t(
@@ -202,7 +203,7 @@ class OC_Calendar_Object{
 		OC_Calendar_App::loadCategoriesFromVCalendar($id, $object);
 		list($type,$startdate,$enddate,$summary,$repeating,$uid) = self::extractData($object);
 
-		$stmt = OCP\DB::prepare( 'UPDATE `*PREFIX*calendar_objects` SET `objecttype`=?,`startdate`=?,`enddate`=?,`repeating`=?,`summary`=?,`calendardata`=?,`lastmodified`= ? WHERE `id` = ?' );
+		$stmt = OCP\DB::prepare( 'UPDATE `*PREFIX*clndr_objects` SET `objecttype`=?,`startdate`=?,`enddate`=?,`repeating`=?,`summary`=?,`calendardata`=?,`lastmodified`= ? WHERE `id` = ?' );
 		$stmt->execute(array($type,$startdate,$enddate,$repeating,$summary,$data,time(),$id));
 
 		OC_Calendar_Calendar::touchCalendar($oldobject['calendarid']);
@@ -225,7 +226,7 @@ class OC_Calendar_Object{
 		$oldvobject = OC_VObject::parse($oldobject['calendardata']);
 		if ($calendar['userid'] != OCP\User::getUser()) {
 			$sharedCalendar = OCP\Share::getItemSharedWithBySource('calendar', $cid);
-			$sharedAccessClassPermissions = OC_Calendar_App::getAccessClassPermissions($oldvobject->VEVENT->CLASS->value);
+			$sharedAccessClassPermissions = OC_Calendar_Object::getAccessClassPermissions($oldvobject);
 			if (!$sharedCalendar || !($sharedCalendar['permissions'] & OCP\PERMISSION_UPDATE) || !($sharedAccessClassPermissions & OCP\PERMISSION_UPDATE)) {
 				throw new Sabre_DAV_Exception_Forbidden(
 					OC_Calendar_App::$l10n->t(
@@ -237,7 +238,7 @@ class OC_Calendar_Object{
 		$object = OC_VObject::parse($data);
 		list($type,$startdate,$enddate,$summary,$repeating,$uid) = self::extractData($object);
 
-		$stmt = OCP\DB::prepare( 'UPDATE `*PREFIX*calendar_objects` SET `objecttype`=?,`startdate`=?,`enddate`=?,`repeating`=?,`summary`=?,`calendardata`=?,`lastmodified`= ? WHERE `id` = ?' );
+		$stmt = OCP\DB::prepare( 'UPDATE `*PREFIX*clndr_objects` SET `objecttype`=?,`startdate`=?,`enddate`=?,`repeating`=?,`summary`=?,`calendardata`=?,`lastmodified`= ? WHERE `id` = ?' );
 		$stmt->execute(array($type,$startdate,$enddate,$repeating,$summary,$data,time(),$oldobject['id']));
 
 		OC_Calendar_Calendar::touchCalendar($oldobject['calendarid']);
@@ -253,11 +254,13 @@ class OC_Calendar_Object{
 	 */
 	public static function delete($id) {
 		$oldobject = self::find($id);
-		$calendar = OC_Calendar_Calendar::find($oldobject['calendarid']);
-		$object = OC_VObject::parse($oldobject['calendardata']);
+		$calid = self::getCalendarid($id);
+		
+		$calendar = OC_Calendar_Calendar::find($calid);
+		$oldvobject = OC_VObject::parse($oldobject['calendardata']);
 		if ($calendar['userid'] != OCP\User::getUser()) {
-			$sharedCalendar = OCP\Share::getItemSharedWithBySource('calendar', $id);
-			$sharedAccessClassPermissions = OC_Calendar_App::getAccessClassPermissions($object->VEVENT->CLASS->value);
+			$sharedCalendar = OCP\Share::getItemSharedWithBySource('calendar',  $calid);
+			$sharedAccessClassPermissions = OC_Calendar_Object::getAccessClassPermissions($oldvobject);
 			if (!$sharedCalendar || !($sharedCalendar['permissions'] & OCP\PERMISSION_DELETE) || !($sharedAccessClassPermissions & OCP\PERMISSION_DELETE)) {
 				throw new Exception(
 					OC_Calendar_App::$l10n->t(
@@ -266,15 +269,13 @@ class OC_Calendar_Object{
 				);
 			}
 		}
-		$stmt = OCP\DB::prepare( 'DELETE FROM `*PREFIX*calendar_objects` WHERE `id` = ?' );
+		$stmt = OCP\DB::prepare( 'DELETE FROM `*PREFIX*clndr_objects` WHERE `id` = ?' );
 		$stmt->execute(array($id));
 		OC_Calendar_Calendar::touchCalendar($oldobject['calendarid']);
 
 		OCP\Share::unshareAll('event', $id);
 
 		OCP\Util::emitHook('OC_Calendar', 'deleteEvent', $id);
-
-		OC_Calendar_App::getVCategories()->purgeObject($id);
 
 		return true;
 	}
@@ -298,7 +299,7 @@ class OC_Calendar_Object{
 				);
 			}
 		}
-		$stmt = OCP\DB::prepare( 'DELETE FROM `*PREFIX*calendar_objects` WHERE `calendarid`= ? AND `uri`=?' );
+		$stmt = OCP\DB::prepare( 'DELETE FROM `*PREFIX*clndr_objects` WHERE `calendarid`= ? AND `uri`=?' );
 		$stmt->execute(array($cid,$uri));
 		OC_Calendar_Calendar::touchCalendar($cid);
 		OCP\Util::emitHook('OC_Calendar', 'deleteEvent', $oldobject['id']);
@@ -309,7 +310,7 @@ class OC_Calendar_Object{
 	public static function moveToCalendar($id, $calendarid) {
 		$calendar = OC_Calendar_Calendar::find($calendarid);
 		if ($calendar['userid'] != OCP\User::getUser()) {
-			$sharedCalendar = OCP\Share::getItemSharedWithBySource('calendar', $id);
+			$sharedCalendar = OCP\Share::getItemSharedWithBySource('calendar', $calendarid);
 			if (!$sharedCalendar || !($sharedCalendar['permissions'] & OCP\PERMISSION_DELETE)) {
 				throw new Exception(
 					OC_Calendar_App::$l10n->t(
@@ -318,7 +319,7 @@ class OC_Calendar_Object{
 				);
 			}
 		}
-		$stmt = OCP\DB::prepare( 'UPDATE `*PREFIX*calendar_objects` SET `calendarid`=? WHERE `id`=?' );
+		$stmt = OCP\DB::prepare( 'UPDATE `*PREFIX*clndr_objects` SET `calendarid`=? WHERE `id`=?' );
 		$stmt->execute(array($calendarid,$id));
 
 		OC_Calendar_Calendar::touchCalendar($calendarid);
@@ -454,20 +455,29 @@ class OC_Calendar_Object{
 
 	/**
 	 * @brief Remove all properties which should not be exported for the AccessClass Confidential
-	 * @param string $calendarId Calendar ID
+	 * @param string $id Event ID
 	 * @param Sabre_VObject $vobject Sabre VObject
 	 * @return object
 	 */
-	public static function cleanByAccessClass($calendarId, $vobject) {
+	public static function cleanByAccessClass($id, $vobject) {
 
 		// Do not clean your own calendar
-		if(OC_Calendar_Object::getowner($calendarId) === OCP\USER::getUser()) {
+		if(OC_Calendar_Object::getowner($id) === OCP\USER::getUser()) {
 			return $vobject;
 		}
 
-		$vevent = $vobject->VEVENT;
-		if(!is_null($vevent->CLASS) && $vevent->CLASS->value == 'CONFIDENTIAL') {
-			foreach ($vevent->children as &$property) {
+		if(isset($vobject->VEVENT)) {
+			$velement = $vobject->VEVENT;
+		}
+		elseif(isset($vobject->VJOURNAL)) {
+			$velement = $vobject->VJOURNAL;
+		}
+		elseif(isset($vobject->VTODO)) {
+			$velement = $vobject->VTODO;
+		}
+
+		if(isset($velement->CLASS) && $velement->CLASS->value == 'CONFIDENTIAL') {
+			foreach ($velement->children as &$property) {
 				switch($property->name) {
 					case 'CREATED':
 					case 'DTSTART':
@@ -481,7 +491,8 @@ class OC_Calendar_Object{
 						$property->value = OC_Calendar_App::$l10n->t('Busy');
 						break;
 					default:
-						$vevent->__unset($property->name);
+						$velement->__unset($property->name);
+						unset($property);
 						break;
 				}
 			}
@@ -490,14 +501,36 @@ class OC_Calendar_Object{
 	}
 
 	/**
+	 * @brief Get the permissions determined by the access class of an event/todo/journal
+	 * @param Sabre_VObject $vobject Sabre VObject
+	 * @return (int) $permissions - CRUDS permissions
+	 * @see OCP\Share
+	 */
+	public static function getAccessClassPermissions($vobject) {
+		if(isset($vobject->VEVENT)) {
+			$velement = $vobject->VEVENT;
+		}
+		elseif(isset($vobject->VJOURNAL)) {
+			$velement = $vobject->VJOURNAL;
+		}
+		elseif(isset($vobject->VTODO)) {
+			$velement = $vobject->VTODO;
+		}
+
+		$accessclass = $velement->getAsString('CLASS');
+
+		return OC_Calendar_App::getAccessClassPermissions($accessclass);
+	}
+
+	/**
 	 * @brief returns the options for the access class of an event
 	 * @return array - valid inputs for the access class of an event
 	 */
 	public static function getAccessClassOptions($l10n) {
 		return array(
-			'PUBLIC'       => (string)$l10n->t('Public'),
-			'PRIVATE'      => (string)$l10n->t('Private'),
-			'CONFIDENTIAL' => (string)$l10n->t('Confidential')
+			'PUBLIC'       => (string)$l10n->t('Show full event'),
+			'PRIVATE'      => (string)$l10n->t('Show only busy'),
+			'CONFIDENTIAL' => (string)$l10n->t('Hide event')
 		);
 	}
 
@@ -1001,11 +1034,9 @@ class OC_Calendar_Object{
 			$timezone = OC_Calendar_App::getTimezone();
 			$timezone = new DateTimeZone($timezone);
 			$start = new DateTime($from.' '.$fromtime, $timezone);
-			$start->setTimezone(new DateTimeZone('UTC'));
 			$end = new DateTime($to.' '.$totime, $timezone);
-			$end->setTimezone(new DateTimeZone('UTC'));
-			$vevent->setDateTime('DTSTART', $start, Sabre\VObject\Property\DateTime::UTC);
-			$vevent->setDateTime('DTEND', $end, Sabre\VObject\Property\DateTime::UTC);
+			$vevent->setDateTime('DTSTART', $start, Sabre\VObject\Property\DateTime::LOCALTZ);
+			$vevent->setDateTime('DTEND', $end, Sabre\VObject\Property\DateTime::LOCALTZ);
 		}
 		unset($vevent->DURATION);
 
@@ -1027,8 +1058,12 @@ class OC_Calendar_Object{
 	 * @return string
 	 */
 	public static function getowner($id) {
+		if ($id == 0) return null;
 		$event = self::find($id);
 		$cal = OC_Calendar_Calendar::find($event['calendarid']);
+		if($cal === false || is_array($cal) === false){
+			return null;
+		}
 		if(array_key_exists('userid', $cal)){
 			return $cal['userid'];
 		}else{
@@ -1076,8 +1111,10 @@ class OC_Calendar_Object{
 			}
 			$return['end'] = $end_dt->format('Y-m-d');
 		}else{
-			$start_dt->setTimezone(new DateTimeZone($tz));
-			$end_dt->setTimezone(new DateTimeZone($tz));
+			if($dtstart->getDateType() !== Sabre\VObject\Property\DateTime::LOCAL) {
+				$start_dt->setTimezone(new DateTimeZone($tz));
+				$end_dt->setTimezone(new DateTimeZone($tz));
+			}
 			$return['start'] = $start_dt->format('Y-m-d H:i:s');
 			$return['end'] = $end_dt->format('Y-m-d H:i:s');
 		}

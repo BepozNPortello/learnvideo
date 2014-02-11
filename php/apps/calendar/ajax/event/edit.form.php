@@ -24,7 +24,8 @@ if(!$data) {
 $object = OC_VObject::parse($data['calendardata']);
 $vevent = $object->VEVENT;
 $object = OC_Calendar_Object::cleanByAccessClass($id, $object);
-$permissions = OC_Calendar_App::getPermissions($id, OC_Calendar_App::EVENT, $vevent->CLASS->value);
+$accessclass = $vevent->getAsString('CLASS');
+$permissions = OC_Calendar_App::getPermissions($id, OC_Calendar_App::EVENT, $accessclass);
 
 $dtstart = $vevent->DTSTART;
 $dtend = OC_Calendar_Object::getDTEndFromVEvent($vevent);
@@ -55,11 +56,10 @@ switch($dtstart->getDateType()) {
 		break;
 }
 
-$accessclass = $vevent->getAsString('CLASS');
-$summary = $vevent->getAsString('SUMMARY');
-$location = $vevent->getAsString('LOCATION');
+$summary = strtr($vevent->getAsString('SUMMARY'), array('\,' => ',', '\;' => ';'));
+$location = strtr($vevent->getAsString('LOCATION'), array('\,' => ',', '\;' => ';'));
 $categories = $vevent->getAsString('CATEGORIES');
-$description = $vevent->getAsString('DESCRIPTION');
+$description = strtr($vevent->getAsString('DESCRIPTION'), array('\,' => ',', '\;' => ';'));
 $last_modified = $vevent->__get('LAST-MODIFIED');
 if ($last_modified) {
 	$lastmodified = $last_modified->getDateTime()->format('U');
@@ -135,7 +135,7 @@ if($data['repeating'] == 1) {
 	if(array_key_exists('BYMONTH', $rrulearr)) {
 		$months = OC_Calendar_App::getByMonthOptions();
 		if(substr_count($rrulearr['BYMONTH'], ',') == 0) {
-			$repeat['bymonth'][] = $months[$month];
+		      $repeat['bymonth'][] = $months[(string)$rrulearr['BYMONTH']];
 		}else{
 			$bymonth = explode(',', $rrulearr['BYMONTH']);
 			foreach($bymonth as $month) {
@@ -148,6 +148,9 @@ if($data['repeating'] == 1) {
 			$repeat['repeat'] = 'daily';
 			break;
 		case 'WEEKLY':
+			if(array_key_exists('BYDAY', $rrulearr) === false) {
+				$rrulearr['BYDAY'] = '';
+			}
 			if($rrulearr['INTERVAL'] % 2 == 0) {
 				$repeat['repeat'] = 'biweekly';
 				$rrulearr['INTERVAL'] = $rrulearr['INTERVAL'] / 2;
@@ -171,8 +174,10 @@ if($data['repeating'] == 1) {
 				$repeat['year'] = 'bydaymonth';
 			}elseif(array_key_exists('BYWEEKNO', $rrulearr)) {
 				$repeat['year'] = 'byweekno';
-			}else{
+			}elseif (array_key_exists('BYYEARDAY', $rrulearr)) {
 				$repeat['year'] = 'byyearday';
+			}else {
+				$repeat['year'] = 'bydate';
 			}
 	}
 	$repeat['interval'] = $rrulearr['INTERVAL'];
@@ -252,6 +257,9 @@ $tmpl->assign('description', $description);
 
 $tmpl->assign('repeat', $repeat['repeat']);
 if($repeat['repeat'] != 'doesnotrepeat') {
+	if(array_key_exists('weekofmonth', $repeat) === false) {
+		$repeat['weekofmonth'] = 1;
+	}
 	$tmpl->assign('repeat_month', isset($repeat['month']) ? $repeat['month'] : 'monthday');
 	$tmpl->assign('repeat_weekdays', isset($repeat['weekdays']) ? $repeat['weekdays'] : array());
 	$tmpl->assign('repeat_interval', isset($repeat['interval']) ? $repeat['interval'] : '1');
@@ -265,8 +273,29 @@ if($repeat['repeat'] != 'doesnotrepeat') {
 	$tmpl->assign('repeat_bymonth', isset($repeat['bymonth']) ? $repeat['bymonth'] : array());
 	$tmpl->assign('repeat_byweekno', isset($repeat['byweekno']) ? $repeat['byweekno'] : array());
 } else {
+	//Some hidden init Values prevent User Errors
+	
+	//init translation util
+	$l = OCP\Util::getL10N('calendar');
+
+	//init
+	$start=$dtstart-> getDateTime();
+	$tWeekDay=$start->format('l');
+	$transWeekDay=$l->t((string)$tWeekDay);
+	$tDayOfMonth=$start->format('j');
+	$tMonth=$start->format('F');
+	$transMonth=$l->t((string)$tMonth);
+	$transByWeekNo=$start->format('W');
+	$transByYearDay=$start->format('z');
+
+	$tmpl->assign('repeat_weekdays',$transWeekDay);
+	$tmpl -> assign('repeat_bymonthday',$tDayOfMonth);
+	$tmpl->assign('repeat_bymonth',$transMonth);
+	$tmpl -> assign('repeat_byweekno', $transByWeekNo);
+	$tmpl -> assign('repeat_byyearday',$transByYearDay);	
+	
 	$tmpl->assign('repeat_month', 'monthday');
-	$tmpl->assign('repeat_weekdays', array());
+	//$tmpl->assign('repeat_weekdays', array());
 	$tmpl->assign('repeat_interval', 1);
 	$tmpl->assign('repeat_end', 'never');
 	$tmpl->assign('repeat_count', '10');

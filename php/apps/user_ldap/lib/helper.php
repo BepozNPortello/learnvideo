@@ -48,18 +48,25 @@ class Helper {
 	static public function getServerConfigurationPrefixes($activeConfigurations = false) {
 		$referenceConfigkey = 'ldap_configuration_active';
 
-		$query = '
+		$sql = '
 			SELECT DISTINCT `configkey`
 			FROM `*PREFIX*appconfig`
 			WHERE `appid` = \'user_ldap\'
 				AND `configkey` LIKE ?
 		';
-		if($activeConfigurations) {
-			$query .= ' AND `configvalue` = \'1\'';
-		}
-		$query = \OCP\DB::prepare($query);
 
-		$serverConfigs = $query->execute(array('%'.$referenceConfigkey))->fetchAll();
+		if($activeConfigurations) {
+			if (\OC_Config::getValue( 'dbtype', 'sqlite' ) === 'oci') {
+				//FIXME oracle hack: need to explicitly cast CLOB to CHAR for comparison
+				$sql .= ' AND to_char(`configvalue`)=\'1\'';
+			} else {
+				$sql .= ' AND `configvalue` = \'1\'';
+			}
+		}
+
+		$stmt = \OCP\DB::prepare($sql);
+
+		$serverConfigs = $stmt->execute(array('%'.$referenceConfigkey))->fetchAll();
 		$prefixes = array();
 
 		foreach($serverConfigs as $serverConfig) {
@@ -68,6 +75,34 @@ class Helper {
 		}
 
 		return $prefixes;
+	}
+
+	/**
+	 *
+	 * @brief determines the host for every configured connection
+	 * @return an array with configprefix as keys
+	 *
+	 */
+	static public function getServerConfigurationHosts() {
+		$referenceConfigkey = 'ldap_host';
+
+		$query = '
+			SELECT DISTINCT `configkey`, `configvalue`
+			FROM `*PREFIX*appconfig`
+			WHERE `appid` = \'user_ldap\'
+				AND `configkey` LIKE ?
+		';
+		$query = \OCP\DB::prepare($query);
+		$configHosts = $query->execute(array('%'.$referenceConfigkey))->fetchAll();
+		$result = array();
+
+		foreach($configHosts as $configHost) {
+			$len = strlen($configHost['configkey']) - strlen($referenceConfigkey);
+			$prefix = substr($configHost['configkey'], 0, $len);
+			$result[$prefix] = $configHost['configvalue'];
+		}
+
+		return $result;
 	}
 
 	/**
@@ -90,16 +125,68 @@ class Helper {
 				AND `appid` = \'user_ldap\'
 				AND `configkey` NOT IN (\'enabled\', \'installed_version\', \'types\', \'bgjUpdateGroupsLastRun\')
 		');
-		$res = $query->execute(array($prefix.'%'));
+		$delRows = $query->execute(array($prefix.'%'));
+
+		if(\OCP\DB::isError($delRows)) {
+			return false;
+		}
+
+		if($delRows === 0) {
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Truncate's the given mapping table
+	 *
+	 * @param string $mapping either 'user' or 'group'
+	 * @return boolean true on success, false otherwise
+	 */
+	static public function clearMapping($mapping) {
+		if($mapping === 'user') {
+			$table = '`*PREFIX*ldap_user_mapping`';
+		} else if ($mapping === 'group') {
+			$table = '`*PREFIX*ldap_group_mapping`';
+		} else {
+			return false;
+		}
+
+		if(strpos(\OCP\Config::getSystemValue('dbtype'), 'sqlite') !== false) {
+			$query = \OCP\DB::prepare('DELETE FROM '.$table);
+		} else {
+			$query = \OCP\DB::prepare('TRUNCATE '.$table);
+		}
+
+
+		$res = $query->execute();
 
 		if(\OCP\DB::isError($res)) {
 			return false;
 		}
 
-		if($res->numRows() == 0) {
+		return true;
+	}
+
+	/**
+	 * @brief extractsthe domain from a given URL
+	 * @param $url the URL
+	 * @return mixed, domain as string on success, false otherwise
+	 */
+	static public function getDomainFromURL($url) {
+		$uinfo = parse_url($url);
+		if(!is_array($uinfo)) {
 			return false;
 		}
 
-		return true;
+		$domain = false;
+		if(isset($uinfo['host'])) {
+			$domain = $uinfo['host'];
+		} else if(isset($uinfo['path'])) {
+			$domain = $uinfo['path'];
+		}
+
+		return $domain;
 	}
 }

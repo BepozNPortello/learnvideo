@@ -8,7 +8,7 @@
  *
  * This class manages our app actions
  */
-OC_Calendar_App::$l10n = new OC_L10N('calendar');
+OC_Calendar_App::$l10n = OCP\Util::getL10N('calendar');
 OC_Calendar_App::$tz = OC_Calendar_App::getTimezone();
 class OC_Calendar_App{
 	const CALENDAR = 'calendar';
@@ -142,12 +142,12 @@ class OC_Calendar_App{
 	 */
 	public static function getVCategories() {
 		if (is_null(self::$categories)) {
-			if(OC_VCategories::isEmpty('event')) {
+			$categories = \OC::$server->getTagManager()->load('event');
+			if($categories->isEmpty('event')) {
 				self::scanCategories();
 			}
-			self::$categories = new OC_VCategories('event',
-				null,
-				self::getDefaultCategories());
+			self::$categories = \OC::$server->getTagManager()
+				->load('event', self::getDefaultCategories());
 		}
 		return self::$categories;
 	}
@@ -157,7 +157,11 @@ class OC_Calendar_App{
 	 * @return (array) $categories
 	 */
 	public static function getCategoryOptions() {
-		$categories = self::getVCategories()->categories();
+		$getNames = function($tag) {
+			return $tag['name'];
+		};
+		$categories = self::getVCategories()->getTags();
+		$categories = array_map($getNames, $categories);
 		return $categories;
 	}
 
@@ -179,8 +183,12 @@ class OC_Calendar_App{
 			}
 		}
 		if(is_array($events) && count($events) > 0) {
-			$vcategories = new OC_VCategories('event');
-			$vcategories->delete($vcategories->categories());
+			$vcategories = \OC::$server->getTagManager()->load('event');
+			$getName = function($tag) {
+				return $tag['name'];
+			};
+			$tags = array_map($getName, $vcategories->getTags());
+			$vcategories->delete($tags);
 			foreach($events as $event) {
 				$vobject = OC_VObject::parse($event['calendardata']);
 				if(!is_null($vobject)) {
@@ -194,8 +202,8 @@ class OC_Calendar_App{
 					if (isset($calendar->VJOURNAL)) {
 						$object = $calendar->VJOURNAL;
 					}
-					if ($object) {
-						$vcategories->loadFromVObject($event['id'], $vobject, true);
+					if ($object && isset($object->CATEGORIES)) {
+						$vcategories->addMultiple($object->CATEGORIES->getParts(), true, $event['id']);
 					}
 				}
 			}
@@ -204,7 +212,7 @@ class OC_Calendar_App{
 
 	/**
 	 * check VEvent for new categories.
-	 * @see OC_VCategories::loadFromVObject
+	 * @see \OCP\ITags::addMultiple()
 	 */
 	public static function loadCategoriesFromVCalendar($id, OC_VObject $calendar) {
 		$object = null;
@@ -217,8 +225,8 @@ class OC_Calendar_App{
 		if (isset($calendar->VJOURNAL)) {
 			$object = $calendar->VJOURNAL;
 		}
-		if ($object) {
-			self::getVCategories()->loadFromVObject($id, $object, true);
+		if ($object && isset($object->CATEGORIES)) {
+			self::getVCategories()->addMultiple($object->CATEGORIES->getParts(), true, $id);
 		}
 	}
 
@@ -424,7 +432,6 @@ class OC_Calendar_App{
 	 * @return (array) $output - readable output
 	 */
 	public static function generateEventOutput(array $event, $start, $end) {
-		\OCP\Util::writeLog('calendar', __METHOD__.' event: '.print_r($event['summary'], true), \OCP\Util::DEBUG);
 		if(!isset($event['calendardata']) && !isset($event['vevent'])) {
 			return false;
 		}
@@ -432,74 +439,134 @@ class OC_Calendar_App{
 			$event['calendardata'] = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:ownCloud's Internal iCal System\n"
 				. $event['vevent']->serialize() .  "END:VCALENDAR";
 		}
-		$object = OC_VObject::parse($event['calendardata']);
-		if(!$object) {
-			\OCP\Util::writeLog('calendar', __METHOD__.' Error parsing event: '.print_r($event, true), \OCP\Util::DEBUG);
-			return array();
-		}
-
-		$output = array();
-
-		if($object->name === 'VEVENT') {
-			$vevent = $object;
-		} elseif(isset($object->VEVENT)) {
-			$vevent = $object->VEVENT;
-		} else {
-			\OCP\Util::writeLog('calendar', __METHOD__.' Object contains not event: '.print_r($event, true), \OCP\Util::DEBUG);
-			return $output;
-		}
-		$id = $event['id'];
-		if(OC_Calendar_Object::getowner($id) !== OCP\USER::getUser()) {
-			// do not show events with private or unknown access class
-			if (isset($vevent->CLASS)
-				&& ($vevent->CLASS->value === 'CONFIDENTIAL'
-				|| $vevent->CLASS->value === 'PRIVATE'
-				|| $vevent->CLASS->value === ''))
-			{
+		try{
+			$object = OC_VObject::parse($event['calendardata']);
+			if(!$object) {
+				\OCP\Util::writeLog('calendar', __METHOD__.' Error parsing event: '.print_r($event, true), \OCP\Util::DEBUG);
+				return array();
+			}
+	
+			$output = array();
+	
+			if($object->name === 'VEVENT') {
+				$vevent = $object;
+			} elseif(isset($object->VEVENT)) {
+				$vevent = $object->VEVENT;
+			} else {
+				\OCP\Util::writeLog('calendar', __METHOD__.' Object contains not event: '.print_r($event, true), \OCP\Util::DEBUG);
 				return $output;
 			}
-			$object = OC_Calendar_Object::cleanByAccessClass($id, $object);
-		}
-		$allday = ($vevent->DTSTART->getDateType() == Sabre\VObject\Property\DateTime::DATE)?true:false;
-		$last_modified = @$vevent->__get('LAST-MODIFIED');
-		$lastmodified = ($last_modified)?$last_modified->getDateTime()->format('U'):0;
-		$staticoutput = array('id'=>(int)$event['id'],
-						'title' => (!is_null($vevent->SUMMARY) && $vevent->SUMMARY->value != '')? $vevent->SUMMARY->value: self::$l10n->t('unnamed'),
-						'description' => isset($vevent->DESCRIPTION)?$vevent->DESCRIPTION->value:'',
-						'lastmodified'=>$lastmodified,
-						'allDay'=>$allday);
-		if(OC_Calendar_Object::isrepeating($id) && OC_Calendar_Repeat::is_cached_inperiod($event['id'], $start, $end)) {
-			$cachedinperiod = OC_Calendar_Repeat::get_inperiod($id, $start, $end);
-			foreach($cachedinperiod as $cachedevent) {
-				$dynamicoutput = array();
-				if($allday) {
-					$start_dt = new DateTime($cachedevent['startdate'], new DateTimeZone('UTC'));
-					$end_dt = new DateTime($cachedevent['enddate'], new DateTimeZone('UTC'));
-					$dynamicoutput['start'] = $start_dt->format('Y-m-d');
-					$dynamicoutput['end'] = $end_dt->format('Y-m-d');
-				}else{
-					$start_dt = new DateTime($cachedevent['startdate'], new DateTimeZone('UTC'));
-					$end_dt = new DateTime($cachedevent['enddate'], new DateTimeZone('UTC'));
-					$start_dt->setTimezone(new DateTimeZone(self::$tz));
-					$end_dt->setTimezone(new DateTimeZone(self::$tz));
-					$dynamicoutput['start'] = $start_dt->format('Y-m-d H:i:s');
-					$dynamicoutput['end'] = $end_dt->format('Y-m-d H:i:s');
+			$id = $event['id'];
+			if(OC_Calendar_Object::getowner($id) !== OCP\USER::getUser()) {
+				// do not show events with private or unknown access class
+				if (isset($vevent->CLASS)
+					&& ($vevent->CLASS->value === 'PRIVATE'
+					|| $vevent->CLASS->value === ''))
+				{
+					return $output;
 				}
-				$output[] = array_merge($staticoutput, $dynamicoutput);
+				$object = OC_Calendar_Object::cleanByAccessClass($id, $object);
 			}
-		}else{
-			if(OC_Calendar_Object::isrepeating($id) || $event['repeating'] == 1) {
-				$object->expand($start, $end);
-			}
-			foreach($object->getComponents() as $singleevent) {
-				if(!($singleevent instanceof Sabre\VObject\Component\VEvent)) {
-					continue;
+			$allday = ($vevent->DTSTART->getDateType() == Sabre\VObject\Property\DateTime::DATE)?true:false;
+			$last_modified = @$vevent->__get('LAST-MODIFIED');
+			$lastmodified = ($last_modified)?$last_modified->getDateTime()->format('U'):0;
+			$staticoutput = array('id'=>(int)$event['id'],
+							'title' => (!is_null($vevent->SUMMARY) && $vevent->SUMMARY->value != '')? strtr($vevent->SUMMARY->value, array('\,' => ',', '\;' => ';')) : self::$l10n->t('unnamed'),
+							'description' => isset($vevent->DESCRIPTION)?strtr($vevent->DESCRIPTION->value, array('\,' => ',', '\;' => ';')):'',
+							'lastmodified'=>$lastmodified,
+							'allDay'=>$allday);
+			if(OC_Calendar_Object::isrepeating($id) && OC_Calendar_Repeat::is_cached_inperiod($event['id'], $start, $end)) {
+				$cachedinperiod = OC_Calendar_Repeat::get_inperiod($id, $start, $end);
+				foreach($cachedinperiod as $cachedevent) {
+					$dynamicoutput = array();
+					if($allday) {
+						$start_dt = new DateTime($cachedevent['startdate'], new DateTimeZone('UTC'));
+						$end_dt = new DateTime($cachedevent['enddate'], new DateTimeZone('UTC'));
+						$dynamicoutput['start'] = $start_dt->format('Y-m-d');
+						$dynamicoutput['end'] = $end_dt->format('Y-m-d');
+					}else{
+						$start_dt = new DateTime($cachedevent['startdate'], new DateTimeZone('UTC'));
+						$end_dt = new DateTime($cachedevent['enddate'], new DateTimeZone('UTC'));
+						$start_dt->setTimezone(new DateTimeZone(self::$tz));
+						$end_dt->setTimezone(new DateTimeZone(self::$tz));
+						$dynamicoutput['start'] = $start_dt->format('Y-m-d H:i:s');
+						$dynamicoutput['end'] = $end_dt->format('Y-m-d H:i:s');
+					}
+					$output[] = array_merge($staticoutput, $dynamicoutput);
 				}
-				$dynamicoutput = OC_Calendar_Object::generateStartEndDate($singleevent->DTSTART, OC_Calendar_Object::getDTEndFromVEvent($singleevent), $allday, self::$tz);
-				$output[] = array_merge($staticoutput, $dynamicoutput);
+			}else{
+				if(OC_Calendar_Object::isrepeating($id) || $event['repeating'] == 1) {
+					$object->expand($start, $end);
+				}
+				foreach($object->getComponents() as $singleevent) {
+					if(!($singleevent instanceof Sabre\VObject\Component\VEvent)) {
+						continue;
+					}
+					$dynamicoutput = OC_Calendar_Object::generateStartEndDate($singleevent->DTSTART, OC_Calendar_Object::getDTEndFromVEvent($singleevent), $allday, self::$tz);
+					$output[] = array_merge($staticoutput, $dynamicoutput);
+				}
+			}
+			return $output;
+		}catch(Exception $e) {
+			$uid = 'unknown';
+			if(isset($event['uri'])){
+				$uid = $event['uri'];
+			}
+			\OCP\Util::writeLog('calendar', 'Event (' . $uid . ') contains invalid data!',\OCP\Util::WARN);
+		}
+	}
+	
+	/**
+	 * @brief use to create HTML emails and send them
+	 * @param $eventid The event id
+	 * @param $location The location
+	 * @param $description The description
+	 * @param $dtstart The start date
+	 * @param $dtend The end date
+	 *
+	 */
+	public static function sendEmails($eventid, $summary, $location, $description, $dtstart, $dtend) {
+		$user = \OCP\User::getUser();
+		$eventsharees = array();
+		$eventShareesNames = array();
+		$emails = array();
+		$sharedwithByEvent = \OCP\Share::getItemShared('event', $eventid);
+		if (is_array($sharedwithByEvent)) {
+			foreach ($sharedwithByEvent as $share) {
+				if ($share['share_type'] === \OCP\Share::SHARE_TYPE_USER || $share['share_type'] === \OCP\Share::SHARE_TYPE_GROUP) {
+					$eventsharees[] = $share;
+				}
+			}
+			foreach ($eventsharees as $sharee) {
+				$eventShareesNames[] = $sharee['share_with'];
 			}
 		}
-		\OCP\Util::writeLog('calendar', __METHOD__.' event: '.print_r($event['summary'], true) . ' done', \OCP\Util::DEBUG);
-		return $output;
+		foreach ($eventShareesNames as $name) {
+			$result = OC_Calendar_Calendar::getUsersEmails($name);
+			$emails[] = $result;
+		}
+		$useremail = OC_Calendar_Calendar::getUsersEmails($user);
+		foreach ($emails as $email) {
+			if($email === null) {
+				continue;
+			}
+
+			$subject = 'Calendar Event Shared';
+
+			$headers = 'MIME-Version: 1.0\r\n';
+			$headers .= 'Content-Type: text/html; charset=utf-8\r\n';
+			$headers .= 'From:' . $useremail;
+
+			$message  = '<html><body>';
+			$message .= '<table style="border:1px solid black;" cellpadding="10">';
+			$message .= "<tr style='background: #eee;'><td colspan='2'><strong>" . $user . '</strong><strong> has shared with you an event</strong></td></tr>';
+			$message .= '<tr><td><strong>Summary:</strong> </td><td>' . \OCP\Util::sanitizeHTML($summary) . '</td></tr>';
+			$message .= '<tr><td><strong>Location:</strong> </td><td>' . \OCP\Util::sanitizeHTML($location) . '</td></tr>';
+			$message .= '<tr><td><strong>Description:</strong> </td><td>' . \OCP\Util::sanitizeHTML($description) . '</td></tr>';
+			$message .= '</table>';
+			$message .= '</body></html>';
+
+			OCP\Util::sendMail($email, "User", $subject, $message, $useremail, $user, $html = 1, $altbody = '', $ccaddress = '', $ccname = '', $bcc = '');
+		}
 	}
 }
