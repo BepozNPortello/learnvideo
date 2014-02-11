@@ -14,13 +14,13 @@ Create an account at http://openshift.redhat.com/
 
 Create a PHP application with a MySQL cartridge:
 
-	rhc app create owncloud php-5.3 mysql-5.1 cron-1.4
+	rhc app create owncloud php-5.4 mysql-5.5 cron-1.4
 
 Add this upstream ownCloud quickstart repo
 
 	cd owncloud
 	rm php/index.php
-	git remote add upstream -m master git://github.com/ichristo/owncloud-openshift-quickstart.git
+	git remote add upstream -m master git://github.com/openshift-quickstart/owncloud-openshift-quickstart.git
 	git pull -s recursive -X theirs upstream master
 
 Push the repo upstream to OpenShift
