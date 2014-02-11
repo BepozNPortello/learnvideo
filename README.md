@@ -20,7 +20,7 @@ Add this upstream ownCloud quickstart repo
 
 	cd owncloud
 	rm php/index.php
-	git remote add upstream -m master git://github.com/openshift-quickstart/owncloud-openshift-quickstart.git
+	git remote add upstream -m master git://github.com/openshift/owncloud-openshift-quickstart.git
 	git pull -s recursive -X theirs upstream master
 
 Push the repo upstream to OpenShift
