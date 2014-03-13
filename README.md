@@ -10,7 +10,7 @@ More information can be found at http://owncloud.org/
 Running on OpenShift
 --------------------
 
-Create an account at http://openshift.redhat.com/
+Create an account at https://www.openshift.com
 
 Create a PHP application with a MySQL cartridge:
 
