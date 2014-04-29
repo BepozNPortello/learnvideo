@@ -1,9 +1,31 @@
 #!/bin/bash
-# This deploy hook gets executed after dependencies are resolved and the
-# build hook has been run but before the application has been started back
-# up again.  This script gets executed directly, so it could be python, php,
-# ruby, etc.
+
+dest_dir=${OPENSHIFT_DATA_DIR}current
+current_version=$(cat ${OPENSHIFT_BUILD_DEPENDENCIES_DIR}.current_version)
+build_dir=${OPENSHIFT_BUILD_DEPENDENCIES_DIR}${current_version}
+
+echo "Starting deploy..."
+
+if [ ! -d "${dest_dir}" ]; then
+  echo "Copying to ${dest_dir}..."
+  mkdir -p $dest_dir
+  cp -rf ${build_dir}/* ${dest_dir}/
+fi
+
+# Replace the php/ directory with provided installation
+if [ -d ${OPENSHIFT_REPO_DIR}php ]; then
+  echo "Linking the instalation with the repo dir..."
+  if [ -f $OPENSHIFT_REPO_DIR/php/config/autoconfig.php ]
+  then
+    cp $OPENSHIFT_REPO_DIR/php/config/autoconfig.php $dest_dir/config
+  fi
+  rm -rf ${OPENSHIFT_REPO_DIR}php
+fi
+ln -sf ${dest_dir} ${OPENSHIFT_REPO_DIR}php
+
 set -e
+
+echo "Checking MySQL database..."
 
 if [ -z "$OPENSHIFT_MYSQL_DB_HOST" ]
 then
@@ -18,3 +40,5 @@ if [ -z "$OPENSHIFT_MYSQL_DB_HOST" ]
 then 
    exit 5
 fi
+
+echo "Completed deploy."

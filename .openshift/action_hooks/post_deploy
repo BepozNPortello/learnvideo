@@ -3,21 +3,29 @@
 # is deployed and started.  This script gets executed directly, so 
 # it could be python, php, ruby, etc.
 
-# need to GET the main page to trigger the autoconfig of the ownCloud instance
+echo "Starting post_deploy..."
+
+# Need to GET the main page to trigger the autoconfig of the ownCloud instance
 if [ -f $OPENSHIFT_REPO_DIR/php/config/autoconfig.php ]
 then
-    pushd $OPENSHIFT_REPO_DIR/php
-    php index.php
-    popd
+  echo "Requesting index.php to trigger autoconfig..."
+  curl -s http://${OPENSHIFT_APP_DNS}/index.php
+  echo "*******************************************"
+  echo "ownCloud configured successfully."
+  echo "Take note of the default admin credentials:"
+  echo "Username: admin"
+  echo "Password: OpenShiftAdmin"
+  echo "*******************************************"
 fi
 
-#COPY Config to Persisted Data Directory
+# Copy config to persisted data directory
 pushd $OPENSHIFT_REPO_DIR/php
 if [ ! -f $OPENSHIFT_DATA_DIR/${OPENSHIFT_APP_NAME}-config.php ]
 then
-    echo "Persisting Configuration."
-    mv config/config.php ${OPENSHIFT_DATA_DIR}/${OPENSHIFT_APP_NAME}-config.php
-    ln -s $OPENSHIFT_DATA_DIR/$OPENSHIFT_APP_NAME-config.php $OPENSHIFT_REPO_DIR/php/config/config.php
+  echo "Persisting configuration..."
+  mv config/config.php ${OPENSHIFT_DATA_DIR}/${OPENSHIFT_APP_NAME}-config.php
+  ln -s $OPENSHIFT_DATA_DIR/$OPENSHIFT_APP_NAME-config.php $OPENSHIFT_REPO_DIR/php/config/config.php
 fi
 popd
 
+echo "Completed post_deploy."
