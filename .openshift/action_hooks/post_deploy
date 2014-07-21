@@ -3,19 +3,30 @@
 # is deployed and started.  This script gets executed directly, so 
 # it could be python, php, ruby, etc.
 
+source $OPENSHIFT_CARTRIDGE_SDK_BASH
+
 echo "Starting post_deploy..."
 
 # Need to GET the main page to trigger the autoconfig of the ownCloud instance
 if [ -f $OPENSHIFT_REPO_DIR/php/config/autoconfig.php ]
 then
+  # Set the initial password
+  admin_password=$(generate_password)
+  set_env_var 'OPENSHIFT_APP_DEFAULT_PASSWORD' $admin_password $OPENSHIFT_HOMEDIR/.env/user_vars
+
   echo "Requesting index.php to trigger autoconfig..."
   curl -s http://${OPENSHIFT_APP_DNS}/index.php
-  echo "*******************************************"
-  echo "ownCloud configured successfully."
-  echo "Take note of the default admin credentials:"
-  echo "Username: admin"
-  echo "Password: OpenShiftAdmin"
-  echo "*******************************************"
+
+  client_result ""
+  client_result "ownCloud configured successfully."
+  client_result "Take note of the default admin credentials:"
+  client_result ""
+  client_result "      Username: admin"
+  client_result "      Password: $admin_password"
+  client_result ""
+  client_result "Don't forget to change your admin password!"
+  client_result ""
+
 fi
 
 # Copy config to persisted data directory

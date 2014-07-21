@@ -32,10 +32,9 @@ Head to your application at:
 
 Default Credentials
 -------------------
-<table>
-<tr><td>Default Admin Username</td><td>admin</td></tr>
-<tr><td>Default Admin Password</td><td>OpenShiftAdmin</td></tr>
-</table>
+
+The default user is 'admin' and the password should be printed out to console
+after deployment. Please change the default password after first login.
 
 To download clients that will sync your ownCloud instance with desktop clients, visit http://owncloud.org/sync-clients/
 
