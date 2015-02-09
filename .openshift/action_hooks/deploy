@@ -10,7 +10,7 @@ echo "Starting deploy..."
 if [ ! -d "${dest_dir}" ]; then
   echo "Copying to ${dest_dir}..."
   mkdir -p $dest_dir
-  cp -rf ${build_dir}/* ${dest_dir}/
+  cp -rf ${build_dir}/. ${dest_dir}/
 fi
 
 # Replace the php/ directory with provided installation
