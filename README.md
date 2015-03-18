@@ -16,6 +16,10 @@ Create a PHP application with a MySQL cartridge:
 
 	rhc app create owncloud php-5.4 mysql-5.5 cron-1.4
 
+or with PostgreSQL cartridge:
+
+	rhc app create owncloud php-5.4 postgresql-9.2 cron-1.4
+
 Add this upstream ownCloud quickstart repo
 
 	cd owncloud
